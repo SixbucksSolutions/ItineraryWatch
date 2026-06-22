@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import typing
@@ -5,6 +6,7 @@ import urllib.parse
 import uuid
 
 import aws_lambda_powertools.utilities.data_classes
+import aws_lambda_powertools.utilities.data_classes.sns_event
 import aws_lambda_powertools.utilities.typing
 
 
@@ -15,28 +17,32 @@ _logger.setLevel(logging.DEBUG)
 def sns_message_entry_point(event: aws_lambda_powertools.utilities.data_classes.SNSEvent,
                             _context: aws_lambda_powertools.utilities.typing.LambdaContext | None) -> None:
 
-    processed_sns_message_ids: list[uuid.UUID] = []
-
     for curr_event_record in event.records:
-        curr_sns_message_id: uuid.UUID  = uuid.UUID(curr_event_record.sns.message_id)
-        _logger.info(f"Starting to process new SNS message with ID {str(curr_sns_message_id)}")
+        _process_sns_event_record(curr_event_record)
 
-        try:
-            parsed_payload: dict[str, int | str] = json.loads(curr_event_record.sns.message)
-        except Exception as e:
-            _logger.warning(f"Could not parse JSON from SNS message payload, error: {e}")
-            continue
 
-        _logger.debug(f"Got JSON payload: {json.dumps(parsed_payload, indent=4, sort_keys=True)}")
+def _process_sns_event_record(curr_record: aws_lambda_powertools.utilities.data_classes.sns_event.SNSEventRecord) -> None:
+    curr_sns_message_id: uuid.UUID = uuid.UUID(curr_record.sns.message_id)
+    _logger.info(f"Starting to process new SNS message with ID {str(curr_sns_message_id)}")
 
-        # Make sure it's a valid message
-        if not _valid_json(parsed_payload):
-            _logger.warning(f"Got invalid JSON, aborting: {json.dumps(parsed_payload, indent=4, sort_keys=True)}")
-            continue
+    try:
+        parsed_payload: dict[str, int | str] = json.loads(curr_record.sns.message)
+    except Exception as e:
+        _logger.warning(f"Could not parse JSON from SNS message payload, error: {e}")
+        return
 
-        valid_search_url: str = typing.cast(str, parsed_payload["search_url"])
+    _logger.debug(f"Got JSON payload: {json.dumps(parsed_payload, indent=4, sort_keys=True)}")
 
-        _logger.info(f"SNS message ID {str(curr_sns_message_id)} contains search URL: \"{valid_search_url}\"")
+    # Make sure it's a valid message
+    if not _valid_json(parsed_payload):
+        _logger.warning(f"Got invalid JSON, aborting: {json.dumps(parsed_payload, indent=4, sort_keys=True)}")
+        return
+
+    valid_search_url: str = typing.cast(str, parsed_payload["search_url"])
+
+    _logger.info(f"SNS message ID {str(curr_sns_message_id)} contains search URL: \"{valid_search_url}\"")
+
+    _scrape_search_url(valid_search_url)
 
 
 def _valid_json(parsed_payload: dict[str, int | str]) -> bool:
@@ -86,6 +92,38 @@ def _valid_url(possible_url: str) -> bool:
     except ValueError:
         return False
 
+
+def _scrape_search_url(url: str) -> None:
+    try:
+        search_url_details: dict[str, typing.Any] = _get_search_url_details(url)
+    except Exception as e:
+        _logger.warning(f"Could not get last scrape time for URL {url}, error: {e}")
+        return
+
+    last_scrape_attempt: datetime.datetime = search_url_details["last_scrape_attempt"]
+
+    if last_scrape_attempt is not None:
+        now_utc: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)
+        time_difference: datetime.timedelta = now_utc - last_scrape_attempt
+
+        if time_difference < datetime.timedelta(hours=24):
+            _logger.info(f"Ignoring scrape request for URL {url}, has not been 24 hours since previous")
+            return
+
+    _logger.info(f"Scraping URL {url} as it's never been scraped or time of previous scrape was >= 24 hours ago")
+
+
+def _get_search_url_details(url: str) -> dict[str, typing.Any]:
+    return {
+        "last_scrape_attempt": datetime.datetime(
+            year=1970,
+            month=1,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            tzinfo=datetime.timezone.utc),
+    }
 
 if __name__ == "__main__":
 
