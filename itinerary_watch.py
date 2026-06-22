@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import time
 import typing
 import urllib.parse
 import uuid
@@ -8,6 +9,8 @@ import uuid
 import aws_lambda_powertools.utilities.data_classes
 import aws_lambda_powertools.utilities.data_classes.sns_event
 import aws_lambda_powertools.utilities.typing
+import bs4
+import requests
 
 
 _logger: logging.Logger = logging.getLogger(__name__)
@@ -31,7 +34,7 @@ def _process_sns_event_record(curr_record: aws_lambda_powertools.utilities.data_
         _logger.warning(f"Could not parse JSON from SNS message payload, error: {e}")
         return
 
-    _logger.debug(f"Got JSON payload: {json.dumps(parsed_payload, indent=4, sort_keys=True)}")
+    _logger.debug(f"Got scrape start message: {json.dumps(parsed_payload, indent=4, sort_keys=True)}")
 
     # Make sure it's a valid message
     if not _valid_json(parsed_payload):
@@ -111,6 +114,52 @@ def _scrape_search_url(url: str) -> None:
             return
 
     _logger.info(f"Scraping URL {url} as it's never been scraped or time of previous scrape was >= 24 hours ago")
+
+    # Start a requests session so the CDN will permit us to search
+    celebrity_website_session: requests.Session = requests.Session()
+
+    celebrity_website_session.headers.update(
+        {
+            "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,"
+                      "*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive"
+        }
+    )
+
+    _logger.debug(f"Starting web scrape for search URL \"{url}\"")
+    time_start: float = time.perf_counter()
+    search_results_response: requests.Response = celebrity_website_session.get(url)
+    time_end: float = time.perf_counter()
+
+    if not search_results_response.ok:
+        _logger.warning(f"Scraping failed for search URL {url}, code: {search_results_response.status_code}, "
+                        f"error: {search_results_response.text}")
+        return
+
+    _logger.debug(f"Scrape of search URL took {time_end - time_start:.03f} seconds, "
+                  f"returned {len(search_results_response.text):,} bytes")
+
+    _process_search_results_response(search_results_response)
+
+
+def _process_search_results_response(search_results_response: requests.Response) -> None:
+    time_start: float = time.perf_counter()
+    # 1. Parse the string using the high-performance 'lxml' engine
+    parsed_html: bs4.BeautifulSoup = bs4.BeautifulSoup(search_results_response.text, "lxml")
+    time_end: float = time.perf_counter()
+    _logger.debug(f"Time to parse HTML: {time_end - time_start:.03f} seconds")
+
+    # 2. Extract text from a specific tag using a class name
+    title = parsed_html.find("h1", class_="title").text
+    print(f"Title: {title}")  # Output: Welcome to Celebrity Cruises
+
+
+
 
 
 def _get_search_url_details(url: str) -> dict[str, typing.Any]:
