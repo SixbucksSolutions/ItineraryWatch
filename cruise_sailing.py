@@ -4,6 +4,7 @@ import enum
 import logging
 import typing
 
+import cruise_day_detail
 import cruise_line
 
 class CruiseSailing(abc.ABC):
@@ -16,7 +17,9 @@ class CruiseSailing(abc.ABC):
                  itinerary_name: str,
                  sailing_date_start: datetime.date,
                  sailing_date_end: datetime.date,
+                 day_details: dict[int, cruise_day_detail.CruiseDayDetail],
                  logging_level: int | str = logging.WARNING) -> None:
+
         self._cruise_line_code: cruise_line.CruiseLineCode = cruise_line_code
         self.cruise_line_name: str = cruise_line.cruise_line_names[self._cruise_line_code]
         self._cruise_ship_code = cruise_ship_code
@@ -25,6 +28,7 @@ class CruiseSailing(abc.ABC):
         self.itinerary_name = itinerary_name
         self.sailing_date_start: datetime.date = sailing_date_start
         self.sailing_date_end: datetime.date = sailing_date_end
+        self.day_details = day_details
         self._id: str = f"sailing.{self._cruise_line_code}.{self._cruise_ship_code}." + \
                         f"{self.sailing_date_start.isoformat()}.{self.sailing_date_end.isoformat()}"
 
