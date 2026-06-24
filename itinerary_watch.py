@@ -40,7 +40,7 @@ def _process_sns_event_record(curr_record: aws_lambda_powertools.utilities.data_
         _logger.warning(f"Got invalid JSON, aborting: {json.dumps(parsed_payload, indent=4, sort_keys=True)}")
         return
 
-    valid_search_url: str = typing.cast(str, parsed_payload["search_url"])
+    valid_search_url: str = typing.cast(str, parsed_payload["monitored_url"])
 
     _logger.info(f"SNS message ID {str(curr_sns_message_id)} contains search URL: \"{valid_search_url}\"")
 
@@ -55,11 +55,11 @@ def _valid_json(parsed_payload: dict[str, int | str]) -> bool:
         _logger.warning("Parsed JSON was not a dict")
         return False
 
-    if not len(parsed_payload) == 2:
+    if not len(parsed_payload) == 3:
         _logger.warning("Dict did not have exactly two keys")
         return False
 
-    check_keys: list[str] = ["schema_version", "search_url"]
+    check_keys: list[str] = ["monitored_url", "monitored_url_id", "schema_version"]
     if not all(key in parsed_payload for key in check_keys):
         _logger.warning("Dict did not contain all of the expected keys")
         return False
@@ -75,12 +75,22 @@ def _valid_json(parsed_payload: dict[str, int | str]) -> bool:
         _logger.warning("Unsupported schema version")
         return False
 
-    if not isinstance(parsed_payload["search_url"], str):
-        _logger.warning("search_url value not a string")
+    if not isinstance(parsed_payload["monitored_url"], str):
+        _logger.warning("monitored_url value not a string")
         return False
 
-    if not _valid_url(typing.cast(str, parsed_payload["search_url"])):
-        _logger.warning("search_url value not a valid URL")
+    if not _valid_url(typing.cast(str, parsed_payload["monitored_url"])):
+        _logger.warning("monitored_url value not a valid URL")
+        return False
+
+    if not isinstance(parsed_payload["monitored_url_id"], str):
+        _logger.warning("monitored_url_id value not a string")
+        return False
+
+    try:
+        uuid.UUID(str(parsed_payload["monitored_url_id"]))
+    except Exception as e:
+        _logger.warning(f"monitored_url_id value not a valid UUID: \"{parsed_payload["monitored_url_id"]}\"")
         return False
 
     return True
@@ -272,7 +282,8 @@ if __name__ == "__main__":
                             "SigningCertUrl": "EXAMPLE",
                             "MessageId": "95df01b4-ee98-5cb9-9903-4c221d41eb5e",
                             "Message": "{\"schema_version\": 1, " + \
-                                "\"search_url\": \"https://www.celebritycruises.com/cruises?search=nights:9~11,gte12|startDate:2028-01-01~2028-01-31|visiting:CARI&sort=by:NIGHTS|order:DESC&country=USA&currency=USD\"}",
+                                "\"monitored_url_id\": \"019ef9cf-e013-79bf-a299-a25f20e2f495\", " + \
+                                "\"monitored_url\": \"https://www.celebritycruises.com/cruises?search=nights:9~11,gte12|startDate:2028-01-01~2028-01-31|visiting:CARI&sort=by:NIGHTS|order:DESC&country=USA&currency=USD\"}",
                             "MessageAttributes": {},
                             "Timestamp": "1970-01-01T00:00:00.000Z",
                             "TopicArn": "arn:aws:sns:us-east-1:123456789012:ExampleTopic",
