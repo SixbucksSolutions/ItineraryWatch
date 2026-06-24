@@ -3,17 +3,17 @@ import datetime
 import enum
 
 
+@dataclasses.dataclass(frozen=True)
+class ShipActivityLocation:
+    name: str
+    region: str
+
+
 class ActivityType(enum.Enum):
     PORT_EMBARK     = enum.auto()
     PORT_DOCKED     = enum.auto()
     PORT_DEBARK     = enum.auto()
     AT_SEA          = enum.auto()
-
-
-@dataclasses.dataclass(frozen=True)
-class ShipActivityLocation:
-    name: str
-    region: str
 
 
 @dataclasses.dataclass(frozen=True)

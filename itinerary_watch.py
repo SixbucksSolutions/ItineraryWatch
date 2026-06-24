@@ -11,8 +11,8 @@ import aws_lambda_powertools.utilities.data_classes.sns_event
 import aws_lambda_powertools.utilities.typing
 import requests
 
-import cruise_line
-import cruise_line_celebrity
+import cruise_lines
+
 
 _logger: logging.Logger = logging.getLogger(__name__)
 _logger.setLevel(logging.DEBUG)
@@ -259,7 +259,7 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
 
     search_results = search_results_response.json()
 
-    matching_sailings = cruise_line_celebrity.CruiseLineCelebrity.parse_graphql_response_json(
+    matching_sailings = cruise_lines.Celebrity.parse_graphql_response_json(
         search_results, logging_level=logging.DEBUG)
 
     _logger.debug(json.dumps(matching_sailings, indent=4, sort_keys=True, default=str))
