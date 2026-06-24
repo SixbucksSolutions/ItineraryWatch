@@ -164,7 +164,32 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
           ) {
             results {
               cruises {
-                productViewLink                
+                id
+                productViewLink
+                masterSailing {
+                  itinerary {
+                    name
+                    code
+                    days {
+                      number
+                      type
+                      ports {
+                        activity
+                        arrivalTime
+                        departureTime
+                        port {
+                          code
+                          name
+                          region
+                        }
+                      }
+                    }
+                    sailingNights
+                    ship {
+                      code
+                    }
+                  }
+                }
                 sailings {
                   itinerary {
                     code
@@ -172,6 +197,10 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
                   sailDate
                   startDate
                   endDate
+                  taxesAndFees {
+                    value
+                    __typename
+                  }
                   stateroomClassPricing {
                     price {
                       netAmount @include(if: $enableNewCasinoExperience)
@@ -185,6 +214,9 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
                   }
                 }
               }
+              cruiseRecommendationId
+              total
+              nlFilters
             }
           }
         }
