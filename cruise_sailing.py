@@ -13,6 +13,7 @@ class CruiseSailing(abc.ABC):
                  cruise_ship_code: enum.Enum,
                  cruise_ship_name: str,
                  cruise_ship_class_name: str | None,
+                 itinerary_name: str,
                  sailing_date_start: datetime.date,
                  sailing_date_end: datetime.date,
                  logging_level: int | str = logging.WARNING) -> None:
@@ -21,6 +22,7 @@ class CruiseSailing(abc.ABC):
         self._cruise_ship_code = cruise_ship_code
         self.cruise_ship_name = cruise_ship_name
         self.cruise_ship_class_name = cruise_ship_class_name
+        self.itinerary_name = itinerary_name
         self.sailing_date_start: datetime.date = sailing_date_start
         self.sailing_date_end: datetime.date = sailing_date_end
         self._id: str = f"sailing.{self._cruise_line_code}.{self._cruise_ship_code}." + \
@@ -41,5 +43,5 @@ class CruiseSailing(abc.ABC):
         """
         :return: human-readable string representation of the object
         """
-        return f"{self.cruise_line_name} {self.cruise_ship_name} sailing: " + \
+        return f"{self.cruise_line_name} {self.cruise_ship_name}, {self.itinerary_name}, " + \
                f"{self.sailing_date_start.isoformat()} to {self.sailing_date_end.isoformat()}"

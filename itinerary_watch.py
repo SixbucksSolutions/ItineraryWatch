@@ -197,10 +197,6 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
                   sailDate
                   startDate
                   endDate
-                  taxesAndFees {
-                    value
-                    __typename
-                  }
                   stateroomClassPricing {
                     price {
                       netAmount @include(if: $enableNewCasinoExperience)
@@ -262,12 +258,10 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
     # print(json.dumps(search_results_response.json(), indent=4, sort_keys=True))
 
     search_results = search_results_response.json()
-    matching_cruises = search_results["data"]["cruiseSearch"]["results"]["cruises"]
 
-    for curr_cruise in matching_cruises:
-        print(f"\n\nFound itinerary: {json.dumps(curr_cruise, indent=4)}")
+    matching_sailings = cruise_line_celebrity.parse_graphql_response_json(search_results, logging_level=logging.DEBUG)
 
-
+    _logger.debug(json.dumps(matching_sailings, indent=4, sort_keys=True, default=str))
 
     # cruise_sailing = cruise_line_celebrity.CruiseSailingCelebrity(search_results_response.text)
     #
