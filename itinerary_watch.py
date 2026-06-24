@@ -11,6 +11,8 @@ import aws_lambda_powertools.utilities.data_classes.sns_event
 import aws_lambda_powertools.utilities.typing
 import requests
 
+import cruise_line
+import cruise_line_celebrity
 
 _logger: logging.Logger = logging.getLogger(__name__)
 _logger.setLevel(logging.DEBUG)
@@ -40,11 +42,13 @@ def _process_sns_event_record(curr_record: aws_lambda_powertools.utilities.data_
         _logger.warning(f"Got invalid JSON, aborting: {json.dumps(parsed_payload, indent=4, sort_keys=True)}")
         return
 
-    valid_search_url: str = typing.cast(str, parsed_payload["monitored_url"])
+    valid_search_url: str = str(parsed_payload["monitored_url"])
+    valid_search_url_id: uuid.UUID = uuid.UUID(str(parsed_payload["monitored_url_id"]))
 
-    _logger.info(f"SNS message ID {str(curr_sns_message_id)} contains search URL: \"{valid_search_url}\"")
+    _logger.info(f"SNS message ID {str(curr_sns_message_id)} contains monitored URL: \"{valid_search_url}\" "
+                 f"(URL ID: \"{valid_search_url_id}\")")
 
-    _scrape_search_url(valid_search_url)
+    _scrape_search_url(valid_search_url, valid_search_url_id)
 
 
 def _valid_json(parsed_payload: dict[str, int | str]) -> bool:
@@ -59,19 +63,19 @@ def _valid_json(parsed_payload: dict[str, int | str]) -> bool:
         _logger.warning("Dict did not have exactly two keys")
         return False
 
-    check_keys: list[str] = ["monitored_url", "monitored_url_id", "schema_version"]
+    check_keys: list[str] = ["monitored_url", "monitored_url_id", "schema_datetime"]
     if not all(key in parsed_payload for key in check_keys):
-        _logger.warning("Dict did not contain all of the expected keys")
+        _logger.warning(f"Dict did not contain all of the expected keys: {sorted(check_keys)}")
         return False
 
-    if not isinstance(parsed_payload["schema_version"], int):
-        _logger.warning("Schema version value not an integer")
+    if not isinstance(parsed_payload["schema_datetime"], str):
+        _logger.warning("Schema version value not a string")
         return False
 
-    supported_schema_versions: set[int] = {
-        1,
+    supported_schema_datetimes: set[str] = {
+        "2026-06-24T15:00Z",
     }
-    if parsed_payload["schema_version"] not in supported_schema_versions:
+    if parsed_payload["schema_datetime"] not in supported_schema_datetimes:
         _logger.warning("Unsupported schema version")
         return False
 
@@ -105,7 +109,7 @@ def _valid_url(possible_url: str) -> bool:
         return False
 
 
-def _scrape_search_url(url: str) -> None:
+def _scrape_search_url(url: str, _url_id: uuid.UUID) -> None:
     try:
         search_url_details: dict[str, typing.Any] = _get_search_url_details(url)
     except Exception as e:
@@ -131,7 +135,7 @@ def _scrape_search_url(url: str) -> None:
     if query_param_search is None:
         raise ValueError(f"Did not find search parameter in search URL \"{url}\"")
 
-    # _logger.debug(f"Extracted search query param \"{query_param_search}\"")
+    _logger.debug(f"Extracted search query param \"{query_param_search}\"")
 
     _logger.info( "Starting Celebrity GraphQL API query for itineraries matching filter string: "
                  f"\"{query_param_search}\"")
@@ -247,9 +251,9 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
     _logger.debug(f"API query returned in {time_end - time_start:.03f} seconds, "
                   f"returned {len(search_results_response.text):,} bytes")
 
-    parsed_search_results = search_results_response.json()
+    cruise_sailing = cruise_line_celebrity.CruiseSailingCelebrity(search_results_response.text)
 
-    _logger.debug(f"Search results: {json.dumps(parsed_search_results, indent=4, sort_keys=True)}")
+    print(f"Repr: {repr(cruise_sailing)}\nStr: {str(cruise_sailing)}")
 
     raise NotImplementedError("Done for now")
 
@@ -281,7 +285,7 @@ if __name__ == "__main__":
                             "Signature": "EXAMPLE",
                             "SigningCertUrl": "EXAMPLE",
                             "MessageId": "95df01b4-ee98-5cb9-9903-4c221d41eb5e",
-                            "Message": "{\"schema_version\": 1, " + \
+                            "Message": "{\"schema_datetime\": \"2026-06-24T15:00Z\", " + \
                                 "\"monitored_url_id\": \"019ef9cf-e013-79bf-a299-a25f20e2f495\", " + \
                                 "\"monitored_url\": \"https://www.celebritycruises.com/cruises?search=nights:9~11,gte12|startDate:2028-01-01~2028-01-31|visiting:CARI&sort=by:NIGHTS|order:DESC&country=USA&currency=USD\"}",
                             "MessageAttributes": {},
