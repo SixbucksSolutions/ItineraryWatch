@@ -1,14 +1,11 @@
 import datetime
 import enum
-import json
 import logging
 import typing
-import urllib.parse
-
-from aws_lambda_powertools.utilities.feature_flags.schema import LOGGER
 
 import cruise_line
 import cruise_sailing
+
 
 class CelebrityShipCode(enum.StrEnum):
     APEX            = "AP"
@@ -71,47 +68,38 @@ ship_classes: dict[CelebrityShipCode, str | None] = {
 }
 
 
-class CruiseSailingCelebrity(cruise_sailing.CruiseSailing):
-    def __init__(self: typing.Self,
-                 master_sailing_graphql_node: dict[str, typing.Any],
-                 sailings_graphql_node: dict[str, typing.Any],
-                 logging_level: int | str = logging.WARNING) -> None:
+class CruiseLineCelebrity:
 
-        ship_code: CelebrityShipCode = \
-            master_sailing_graphql_node["itinerary"]["ship"]["code"]
+    @staticmethod
+    def parse_graphql_response_json(parsed_graphql_json: dict[str, typing.Any],
+                                    logging_level: int | str = logging.WARNING) -> list[cruise_sailing.CruiseSailing]:
+        matching_sailings: list[dict[str, typing.Any]] = \
+            parsed_graphql_json["data"]["cruiseSearch"]["results"]["cruises"]
 
-        itinerary_name: str = master_sailing_graphql_node["itinerary"]["name"]
+        parsed_sailings: list[cruise_sailing.CruiseSailing] = []
 
-        start_date: datetime.date = datetime.date.fromisoformat(sailings_graphql_node["startDate"])
-        end_date: datetime.date = datetime.date.fromisoformat(sailings_graphql_node["endDate"])
+        for curr_itinerary in matching_sailings:
+            master_sailing_graphql_node = curr_itinerary["masterSailing"]
+            for curr_itinerary_sailing in curr_itinerary["sailings"]:
+                ship_code: CelebrityShipCode = \
+                    master_sailing_graphql_node["itinerary"]["ship"]["code"]
 
+                itinerary_name: str = master_sailing_graphql_node["itinerary"]["name"]
 
-        # Now populate fields in abstracted parent
-        super().__init__(
-            cruise_line.CruiseLineCode.CELEBRITY,
-            ship_code,
-            ship_names[ship_code],
-            ship_classes[ship_code],
-            itinerary_name,
-            start_date,
-            end_date,
-            logging_level
-        )
+                start_date: datetime.date = datetime.date.fromisoformat(curr_itinerary_sailing["startDate"])
+                end_date: datetime.date = datetime.date.fromisoformat(curr_itinerary_sailing["endDate"])
 
-        # self._logger.debug(json.dumps(master_sailing_graphql_node, indent=4, sort_keys=True))
+                parsed_sailings.append(
+                    cruise_sailing.CruiseSailing(
+                        cruise_line.CruiseLineCode.CELEBRITY,
+                        ship_code,
+                        ship_names[ship_code],
+                        ship_classes[ship_code],
+                        itinerary_name,
+                        start_date,
+                        end_date,
+                        logging_level
+                    )
+                )
 
-        # raise NotImplementedError("Not a thing")
-
-
-
-def parse_graphql_response_json(parsed_graphql_json: dict[str, typing.Any],
-                                logging_level: int | str = logging.WARNING) -> list[cruise_sailing.CruiseSailing]:
-    matching_sailings: list[dict[str, typing.Any]] = parsed_graphql_json["data"]["cruiseSearch"]["results"]["cruises"]
-
-    parsed_sailings: list[cruise_sailing.CruiseSailing] = []
-
-    for curr_itinerary in matching_sailings:
-        for curr_itinerary_sailing in curr_itinerary["sailings"]:
-            parsed_sailings.append(CruiseSailingCelebrity(curr_itinerary["masterSailing"], curr_itinerary_sailing))
-
-    return parsed_sailings
+        return parsed_sailings

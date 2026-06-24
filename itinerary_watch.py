@@ -259,7 +259,8 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
 
     search_results = search_results_response.json()
 
-    matching_sailings = cruise_line_celebrity.parse_graphql_response_json(search_results, logging_level=logging.DEBUG)
+    matching_sailings = cruise_line_celebrity.CruiseLineCelebrity.parse_graphql_response_json(
+        search_results, logging_level=logging.DEBUG)
 
     _logger.debug(json.dumps(matching_sailings, indent=4, sort_keys=True, default=str))
 

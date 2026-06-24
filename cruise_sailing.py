@@ -1,4 +1,3 @@
-import abc
 import datetime
 import enum
 import logging
@@ -7,8 +6,8 @@ import typing
 import cruise_day_detail
 import cruise_line
 
-class CruiseSailing(abc.ABC):
-    @abc.abstractmethod
+
+class CruiseSailing:
     def __init__(self: typing.Self,
                  cruise_line_code: cruise_line.CruiseLineCode,
                  cruise_ship_code: enum.Enum,
