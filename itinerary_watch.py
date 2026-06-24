@@ -150,14 +150,11 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
           ) {
             results {
               cruises {
-                id
-                productViewLink
-                
+                productViewLink                
                 masterSailing {
                   itinerary {
                     name
                     code
-                    voyageType
                     days {
                       number
                       type
@@ -172,27 +169,13 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
                         }
                       }
                     }
-                    departurePort {
-                      code
-                      name
-                      region
-                    }
-                    destination {
-                      code
-                      name
-                    }
-                    portSequence
                     sailingNights
                     ship {
-                      code
                       name
                     }
-                    totalNights
-                    type
                   }
                 }                
                 sailings {
-                  id
                   itinerary {
                     code
                   }
