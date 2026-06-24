@@ -28,4 +28,4 @@ cruise_line_names: dict[CruiseLineCode, str] = {
 
 
 # Optional: Define what gets exposed during "from my_package import *"
-__all__ = ['CruiseLineCode', 'cruise_line_names', 'Celebrity', ]
+__all__ = ['CruiseLineCode', 'cruise_line_names', 'Celebrity']
