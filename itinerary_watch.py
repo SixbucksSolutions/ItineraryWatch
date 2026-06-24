@@ -152,192 +152,7 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
               cruises {
                 id
                 productViewLink
-                highlights {
-                  id
-                  backgroundColor
-                  label
-                  borderColor
-                  textColor
-                  shape
-                }
-                lowestPriceSailing {
-                  bookingLink
-                  id
-                  lowestStateroomClassPrice {
-                    price {
-                      value
-                      originalAmount @include(if: $enableNewCasinoExperience)
-                      netAmount @include(if: $enableNewCasinoExperience)
-                      retrievedAt
-                      discountAmount @include(if: $enableNewCasinoExperience)
-                      taxesAndFeesAmount @include(if: $enableNewCasinoExperience)
-                      areTaxesAndFeesIncluded @include(if: $enableNewCasinoExperience)
-                      isComplimentary @include(if: $enableNewCasinoExperience)
-                      isPromotionApplied @include(if: $enableNewCasinoExperience)
-                      currency {
-                        code
-                      }
-                    }
-                    stateroomClass {
-                      id
-                      content {
-                        code
-                      }
-                    }
-                  }
-                  sailDate
-                  startDate
-                  endDate
-                  taxesAndFees {
-                    value
-                  }
-                  taxesAndFeesIncluded
-                }
-                displaySailing {
-                  bookingLink
-                  id
-                  lowestStateroomClassPrice {
-                    price {
-                      value
-                      originalAmount @include(if: $enableNewCasinoExperience)
-                      netAmount @include(if: $enableNewCasinoExperience)
-                      retrievedAt
-                      discountAmount @include(if: $enableNewCasinoExperience)
-                      taxesAndFeesAmount @include(if: $enableNewCasinoExperience)
-                      areTaxesAndFeesIncluded @include(if: $enableNewCasinoExperience)
-                      isComplimentary @include(if: $enableNewCasinoExperience)
-                      isPromotionApplied @include(if: $enableNewCasinoExperience)
-                      currency {
-                        code
-                        __typename
-                      }
-                      __typename
-                    }
-                    stateroomClass {
-                      id
-                      content {
-                        code
-                        __typename
-                      }
-                      __typename
-                    }
-                    __typename
-                  }
-                  sailDate
-                  startDate
-                  endDate
-                  taxesAndFees {
-                    value
-                    __typename
-                  }
-                  taxesAndFeesIncluded
-                  __typename
-                }
-                masterSailing {
-                  itinerary {
-                    name
-                    code
-                    voyageType
-                    media {
-                      images {
-                        path
-                      }
-                    }
-                    days {
-                      number
-                      type
-                      ports {
-                        activity
-                        arrivalTime
-                        departureTime
-                        port {
-                          code
-                          name
-                          region
-                        }
-                      }
-                    }
-                    departurePort {
-                      code
-                      name
-                      region
-                    }
-                    destination {
-                      code
-                      name
-                    }
-                    postTour {
-                      days {
-                        number
-                        type
-                        ports {
-                          activity
-                          arrivalTime
-                          departureTime
-                          port {
-                            code
-                            name
-                            region
-                          }
-                        }
-                      }
-                      duration
-                    }
-                    preTour {
-                      days {
-                        number
-                        type
-                        ports {
-                          activity
-                          arrivalTime
-                          departureTime
-                          port {
-                            code
-                            name
-                            region
-                          }
-                        }
-                      }
-                      duration
-                    }
-                    portSequence
-                    sailingNights
-                    ship {
-                      code
-                      name
-                      stateroomClasses {
-                        id
-                        name
-                        content {
-                          amenities
-                          area
-                          code
-                          maxCapacity
-                          media {
-                            images {
-                              path
-                              meta {
-                                description
-                                title
-                                location
-                              }
-                            }
-                          }
-                          superCategory
-                        }
-                      }
-                    }
-                    portSequence
-                    totalNights
-                    type
-                    rivers {
-                      code
-                      name
-                    }
-                  }
-                }
                 sailings {
-                  bookingLink
                   id
                   itinerary {
                     code
@@ -345,38 +160,19 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
                   sailDate
                   startDate
                   endDate
-                  taxesAndFees {
-                    value
-                    __typename
-                  }
-                  taxesAndFeesIncluded
                   stateroomClassPricing {
                     price {
-                      value
-                      originalAmount @include(if: $enableNewCasinoExperience)
                       netAmount @include(if: $enableNewCasinoExperience)
-                      retrievedAt
-                      discountAmount @include(if: $enableNewCasinoExperience)
-                      taxesAndFeesAmount @include(if: $enableNewCasinoExperience)
-                      areTaxesAndFeesIncluded @include(if: $enableNewCasinoExperience)
-                      isComplimentary @include(if: $enableNewCasinoExperience)
-                      isPromotionApplied @include(if: $enableNewCasinoExperience)
                       currency {
                         code
                       }
                     }
                     stateroomClass {
                       id
-                      content {
-                        code
-                      }
                     }
                   }
                 }
               }
-              cruiseRecommendationId
-              total
-              nlFilters
             }
           }
         }
