@@ -9,7 +9,6 @@ import uuid
 import aws_lambda_powertools.utilities.data_classes
 import aws_lambda_powertools.utilities.data_classes.sns_event
 import aws_lambda_powertools.utilities.typing
-import bs4
 import requests
 
 
@@ -115,51 +114,313 @@ def _scrape_search_url(url: str) -> None:
 
     _logger.info(f"Scraping URL {url} as it's never been scraped or time of previous scrape was >= 24 hours ago")
 
-    # Start a requests session so the CDN will permit us to search
-    celebrity_website_session: requests.Session = requests.Session()
+    # Pull out search filters from search URL
+    parsed_url: urllib.parse.ParseResult = urllib.parse.urlparse(url)
 
-    celebrity_website_session.headers.update(
-        {
-            "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,"
-                      "*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive"
+    query_param_search: str | None = dict(urllib.parse.parse_qsl(parsed_url.query)).get("search")
+    if query_param_search is None:
+        raise ValueError(f"Did not find search parameter in search URL \"{url}\"")
+
+    # _logger.debug(f"Extracted search query param \"{query_param_search}\"")
+
+    _logger.info( "Starting Celebrity GraphQL API query for itineraries matching filter string: "
+                 f"\"{query_param_search}\"")
+
+    _celebrity_api_query(query_param_search)
+
+
+def _celebrity_api_query(graphql_filter_str: str) -> None:
+    graphql_api_url: str = "https://www.celebritycruises.com/cruises/graph"
+
+    graphql_query_str: str = """
+        query CruisesSearchResults(
+          $filters: String
+          $qualifiers: String
+          $sort: CruiseSearchSort
+          $pagination: CruiseSearchPagination
+          $nlSearch: String
+          $enableNewCasinoExperience: Boolean = false
+        ) {
+          cruiseSearch(
+            filters: $filters
+            qualifiers: $qualifiers
+            sort: $sort
+            pagination: $pagination
+            nlSearch: $nlSearch
+          ) {
+            results {
+              cruises {
+                id
+                productViewLink
+                highlights {
+                  id
+                  backgroundColor
+                  label
+                  borderColor
+                  textColor
+                  shape
+                }
+                lowestPriceSailing {
+                  bookingLink
+                  id
+                  lowestStateroomClassPrice {
+                    price {
+                      value
+                      originalAmount @include(if: $enableNewCasinoExperience)
+                      netAmount @include(if: $enableNewCasinoExperience)
+                      retrievedAt
+                      discountAmount @include(if: $enableNewCasinoExperience)
+                      taxesAndFeesAmount @include(if: $enableNewCasinoExperience)
+                      areTaxesAndFeesIncluded @include(if: $enableNewCasinoExperience)
+                      isComplimentary @include(if: $enableNewCasinoExperience)
+                      isPromotionApplied @include(if: $enableNewCasinoExperience)
+                      currency {
+                        code
+                      }
+                    }
+                    stateroomClass {
+                      id
+                      content {
+                        code
+                      }
+                    }
+                  }
+                  sailDate
+                  startDate
+                  endDate
+                  taxesAndFees {
+                    value
+                  }
+                  taxesAndFeesIncluded
+                }
+                displaySailing {
+                  bookingLink
+                  id
+                  lowestStateroomClassPrice {
+                    price {
+                      value
+                      originalAmount @include(if: $enableNewCasinoExperience)
+                      netAmount @include(if: $enableNewCasinoExperience)
+                      retrievedAt
+                      discountAmount @include(if: $enableNewCasinoExperience)
+                      taxesAndFeesAmount @include(if: $enableNewCasinoExperience)
+                      areTaxesAndFeesIncluded @include(if: $enableNewCasinoExperience)
+                      isComplimentary @include(if: $enableNewCasinoExperience)
+                      isPromotionApplied @include(if: $enableNewCasinoExperience)
+                      currency {
+                        code
+                        __typename
+                      }
+                      __typename
+                    }
+                    stateroomClass {
+                      id
+                      content {
+                        code
+                        __typename
+                      }
+                      __typename
+                    }
+                    __typename
+                  }
+                  sailDate
+                  startDate
+                  endDate
+                  taxesAndFees {
+                    value
+                    __typename
+                  }
+                  taxesAndFeesIncluded
+                  __typename
+                }
+                masterSailing {
+                  itinerary {
+                    name
+                    code
+                    voyageType
+                    media {
+                      images {
+                        path
+                      }
+                    }
+                    days {
+                      number
+                      type
+                      ports {
+                        activity
+                        arrivalTime
+                        departureTime
+                        port {
+                          code
+                          name
+                          region
+                        }
+                      }
+                    }
+                    departurePort {
+                      code
+                      name
+                      region
+                    }
+                    destination {
+                      code
+                      name
+                    }
+                    postTour {
+                      days {
+                        number
+                        type
+                        ports {
+                          activity
+                          arrivalTime
+                          departureTime
+                          port {
+                            code
+                            name
+                            region
+                          }
+                        }
+                      }
+                      duration
+                    }
+                    preTour {
+                      days {
+                        number
+                        type
+                        ports {
+                          activity
+                          arrivalTime
+                          departureTime
+                          port {
+                            code
+                            name
+                            region
+                          }
+                        }
+                      }
+                      duration
+                    }
+                    portSequence
+                    sailingNights
+                    ship {
+                      code
+                      name
+                      stateroomClasses {
+                        id
+                        name
+                        content {
+                          amenities
+                          area
+                          code
+                          maxCapacity
+                          media {
+                            images {
+                              path
+                              meta {
+                                description
+                                title
+                                location
+                              }
+                            }
+                          }
+                          superCategory
+                        }
+                      }
+                    }
+                    portSequence
+                    totalNights
+                    type
+                    rivers {
+                      code
+                      name
+                    }
+                  }
+                }
+                sailings {
+                  bookingLink
+                  id
+                  itinerary {
+                    code
+                  }
+                  sailDate
+                  startDate
+                  endDate
+                  taxesAndFees {
+                    value
+                    __typename
+                  }
+                  taxesAndFeesIncluded
+                  stateroomClassPricing {
+                    price {
+                      value
+                      originalAmount @include(if: $enableNewCasinoExperience)
+                      netAmount @include(if: $enableNewCasinoExperience)
+                      retrievedAt
+                      discountAmount @include(if: $enableNewCasinoExperience)
+                      taxesAndFeesAmount @include(if: $enableNewCasinoExperience)
+                      areTaxesAndFeesIncluded @include(if: $enableNewCasinoExperience)
+                      isComplimentary @include(if: $enableNewCasinoExperience)
+                      isPromotionApplied @include(if: $enableNewCasinoExperience)
+                      currency {
+                        code
+                      }
+                    }
+                    stateroomClass {
+                      id
+                      content {
+                        code
+                      }
+                    }
+                  }
+                }
+              }
+              cruiseRecommendationId
+              total
+              nlFilters
+            }
+          }
         }
-    )
+    """
 
-    _logger.debug(f"Starting web scrape for search URL \"{url}\"")
+    graphql_variables: dict[str, str | dict[str, str] | dict[str, int] | bool] = {
+        "filters"   : "nights:9~11,gte12|startDate:2028-01-01~2028-01-31|visiting:CARI",
+        "currency"  : "USD",
+        "pagination"    : {
+            "count"     : 25,
+            "skip"      : 0
+        },
+        "enableNewCasinoExperience": True,
+    }
+
+    graphql_payload: dict[str, str | dict[str, str | dict[str, str] | dict[str, int] | bool]] = {
+        "query"     : graphql_query_str,
+        "variables" : graphql_variables,
+    }
+
+    # If we advertise we're Python requests, the CDN throws a 403 Access Denied; pretend to be Chrome on Win11
+    cdn_deception_headers: dict[str, str] = {
+        "User-Agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/121.0.0.0 Safari/537.36",
+    }
+
     time_start: float = time.perf_counter()
-    search_results_response: requests.Response = celebrity_website_session.get(url)
+    search_results_response: requests.Response = requests.post(
+        graphql_api_url, json=graphql_payload, headers=cdn_deception_headers)
     time_end: float = time.perf_counter()
 
     if not search_results_response.ok:
-        _logger.warning(f"Scraping failed for search URL {url}, code: {search_results_response.status_code}, "
-                        f"error: {search_results_response.text}")
+        _logger.warning( "Querying Celebrity GraphQL API endpoint failed, "
+                        f"code: {search_results_response.status_code}, error: {search_results_response.text}")
         return
 
-    _logger.debug(f"Scrape of search URL took {time_end - time_start:.03f} seconds, "
+    _logger.debug(f"API query returned in {time_end - time_start:.03f} seconds, "
                   f"returned {len(search_results_response.text):,} bytes")
 
-    _process_search_results_response(search_results_response)
+    parsed_search_results = search_results_response.json()
 
+    _logger.debug(f"Search results: {json.dumps(parsed_search_results, indent=4, sort_keys=True)}")
 
-def _process_search_results_response(search_results_response: requests.Response) -> None:
-    time_start: float = time.perf_counter()
-    # 1. Parse the string using the high-performance 'lxml' engine
-    parsed_html: bs4.BeautifulSoup = bs4.BeautifulSoup(search_results_response.text, "lxml")
-    time_end: float = time.perf_counter()
-    _logger.debug(f"Time to parse HTML: {time_end - time_start:.03f} seconds")
-
-    # 2. Extract text from a specific tag using a class name
-    title = parsed_html.find("h1", class_="title").text
-    print(f"Title: {title}")  # Output: Welcome to Celebrity Cruises
-
-
-
+    raise NotImplementedError("Done for now")
 
 
 def _get_search_url_details(url: str) -> dict[str, typing.Any]:
