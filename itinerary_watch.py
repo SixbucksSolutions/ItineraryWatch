@@ -214,16 +214,19 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
         "query"     : graphql_query_str,
         "variables" : graphql_variables,
     }
+    query_headers: dict[str, str] = {
+        # Turns out this GraphQL endpoint is hosted by Celebrity's parent. If you don't signal you want
+        #   Celebrity results in your query headers, you get Royal Caribbean results by default
+        "Brand"         : "C",
 
-    # If we advertise we're Python requests, the CDN throws a 403 Access Denied; pretend to be Chrome on Win11
-    cdn_deception_headers: dict[str, str] = {
-        "User-Agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/121.0.0.0 Safari/537.36",
+        # If we advertise we're Python requests, the CDN throws a 403 Access Denied; pretend to be Chrome on Win11
+        "User-Agent"    : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/121.0.0.0 Safari/537.36",
     }
 
     time_start: float = time.perf_counter()
     search_results_response: requests.Response = requests.post(
-        graphql_api_url, json=graphql_payload, headers=cdn_deception_headers)
+        graphql_api_url, json=graphql_payload, headers=query_headers)
     time_end: float = time.perf_counter()
 
     if not search_results_response.ok:
