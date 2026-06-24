@@ -165,30 +165,6 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
             results {
               cruises {
                 productViewLink                
-                masterSailing {
-                  itinerary {
-                    name
-                    code
-                    days {
-                      number
-                      type
-                      ports {
-                        activity
-                        arrivalTime
-                        departureTime
-                        port {
-                          code
-                          name
-                          region
-                        }
-                      }
-                    }
-                    sailingNights
-                    ship {
-                      name
-                    }
-                  }
-                }                
                 sailings {
                   itinerary {
                     code
@@ -251,9 +227,19 @@ def _celebrity_api_query(graphql_filter_str: str) -> None:
     _logger.debug(f"API query returned in {time_end - time_start:.03f} seconds, "
                   f"returned {len(search_results_response.text):,} bytes")
 
-    cruise_sailing = cruise_line_celebrity.CruiseSailingCelebrity(search_results_response.text)
+    # print(json.dumps(search_results_response.json(), indent=4, sort_keys=True))
 
-    print(f"Repr: {repr(cruise_sailing)}\nStr: {str(cruise_sailing)}")
+    search_results = search_results_response.json()
+    matching_cruises = search_results["data"]["cruiseSearch"]["results"]["cruises"]
+
+    for curr_cruise in matching_cruises:
+        print(f"\n\nFound itinerary: {json.dumps(curr_cruise, indent=4)}")
+
+
+
+    # cruise_sailing = cruise_line_celebrity.CruiseSailingCelebrity(search_results_response.text)
+    #
+    # print(f"Repr: {repr(cruise_sailing)}\nStr: {str(cruise_sailing)}")
 
     raise NotImplementedError("Done for now")
 

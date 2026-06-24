@@ -70,7 +70,7 @@ ship_classes: dict[CelebrityShipCode, str | None] = {
 
 class CruiseSailingCelebrity(cruise_sailing.CruiseSailing):
     def __init__(self: typing.Self,
-                 sailing_url: urllib.parse.ParseResult,
+                 sailing_code: str,
                  logging_level: int | str = logging.WARNING) -> None:
 
         # Now populate fields in abstracted parent
