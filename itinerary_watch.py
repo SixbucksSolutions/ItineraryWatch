@@ -228,7 +228,8 @@ if __name__ == "__main__":
                             "Signature": "EXAMPLE",
                             "SigningCertUrl": "EXAMPLE",
                             "MessageId": "95df01b4-ee98-5cb9-9903-4c221d41eb5e",
-                            "Message": "{\"schema_datetime\": \"2026-06-24T15:00Z\", " + \
+                            "Message": "{" + \
+                                "\"schema_datetime\": \"2026-06-24T15:00Z\", " + \
                                 "\"monitored_url_id\": \"019ef9cf-e013-79bf-a299-a25f20e2f495\", " + \
                                 "\"monitored_url\": \"https://www.celebritycruises.com/cruises?search=nights:9~11,gte12|startDate:2028-01-01~2028-01-31|visiting:CARI&sort=by:NIGHTS|order:DESC&country=USA&currency=USD\"}",
                             "MessageAttributes": {},
