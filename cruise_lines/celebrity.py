@@ -252,7 +252,7 @@ class Celebrity:
 
             Celebrity._logger.info(f"Finished processing for itinerary: {str(parsed_sailings[-1])}")
 
-        return parsed_sailings
+        return sorted(parsed_sailings)
 
     @staticmethod
     def _parse_day_details(master_sailing_graphql_node: dict[str, typing.Any],

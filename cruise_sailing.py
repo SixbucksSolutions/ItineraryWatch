@@ -1,5 +1,6 @@
 import datetime
 import enum
+import functools
 import logging
 import typing
 
@@ -7,6 +8,7 @@ import cruise_day_detail
 import cruise_lines
 
 
+@functools.total_ordering
 class CruiseSailing:
     def __init__(self,
                  cruise_line_code: cruise_lines.CruiseLineCode,
@@ -54,3 +56,24 @@ class CruiseSailing:
         """
         return f"{self.cruise_line_name} {self.cruise_ship_name}, {self.itinerary_name}, " + \
                f"{self.sailing_date_start.isoformat()} to {self.sailing_date_end.isoformat()}"
+
+
+    # For total ordering decorator, need to implement < and == and then populates the rest of the ordering
+    #       comparison operators
+    def __lt__(self, other: object) -> bool | type(NotImplemented):
+        if not isinstance(other, CruiseSailing):
+            return NotImplemented
+
+        # Sort order: first on sailing start date, if equal, by strict alpha comparison on *lowercase* ship names
+        if self.sailing_date_start == other.sailing_date_start:
+            return self.cruise_ship_name.lower() < other.cruise_ship_name.lower()
+
+        return self.sailing_date_start < other.sailing_date_start
+
+
+    def __eq__(self, other: object) -> bool | type(NotImplemented):
+        if not isinstance(other, CruiseSailing):
+            return NotImplemented
+
+        return self.sailing_date_start == other.sailing_date_start and \
+            self.cruise_ship_name.lower() == other.cruise_ship_name.lower()
