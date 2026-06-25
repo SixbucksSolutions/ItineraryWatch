@@ -142,8 +142,10 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
 
     # Did search results change?
     if serialized_matches == search_results_to_compare_against:
-        _logger.info("Our serialized data exactly matches most recent from \"DB\", nothing more to do")
+        _logger.info("Our serialized data exactly matches most recent state in DB, nothing more to do")
         return
+
+    _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
 
     # Write these search results out
     _write_new_search_results_to_db(url_id, serialized_matches)
@@ -184,7 +186,7 @@ def _get_latest_serialized_search_results_for_query(url_id: uuid.UUID) -> list[d
     # Filenames are ISO 8601 datetimes, return contents of not recent
     most_recent_json_path: pathlib.Path = sorted(dir_json_contents, reverse=True)[0]
 
-    _logger.debug(f"Most recent search results for search URL {str(url_id)}: {most_recent_json_path.stem}")
+    _logger.debug(f"Most recent search results in DB have timestamp: {most_recent_json_path.stem}")
 
     with open(most_recent_json_path) as state_json_handle:
         parsed_json_contents: list[dict] = json.load(state_json_handle)
@@ -203,7 +205,7 @@ def _write_new_search_results_to_db(url_id: uuid.UUID, serializable_search_resul
 
     # Now we know the dir existed previously OR we created it, write out state with current UTC timestamp
     json_file_path: pathlib.Path = dir_for_this_url / \
-                     f"{datetime.datetime.now(tz=datetime.timezone.utc).isoformat(sep=" ", timespec="seconds")}.json"
+                     f"{datetime.datetime.now(tz=datetime.timezone.utc).isoformat(sep=" ", timespec="minutes")}.json"
 
     with open(json_file_path, "w") as state_json_handle:
         json.dump(serializable_search_results, state_json_handle, indent=4)
