@@ -76,7 +76,7 @@ _ship_classes: dict[_CelebrityShipCode, str | None] = {
 class Celebrity:
 
     _logger: logging.Logger = logging.getLogger("cruise_lines.Celebrity")
-    _logger.setLevel(logging.DEBUG)
+    _logger.setLevel(logging.INFO)
 
     @staticmethod
     def perform_itinerary_search(search_url: str) -> list[cruise_sailing.CruiseSailing]:
@@ -268,8 +268,8 @@ class Celebrity:
         sailing_day_breakdown: list[cruise_day_detail.CruiseDayDetail] = []
 
         for day_number, day_api_details in enumerate(master_sailing_days, start=1):
-            Celebrity._logger.debug(f"Processing day number {day_number} with details: {json.dumps(day_api_details, 
-                indent=4, sort_keys=True)}")
+            # Celebrity._logger.debug(f"Processing day number {day_number} with details: {json.dumps(day_api_details,
+            #     indent=4, sort_keys=True)}")
 
             # Embark day
             if day_number == 1:
