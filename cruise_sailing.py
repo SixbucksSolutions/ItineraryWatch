@@ -58,8 +58,8 @@ class CruiseSailing:
                f"{self.sailing_date_start.isoformat()} to {self.sailing_date_end.isoformat()}"
 
 
-    # For total ordering decorator, need to implement < and == and then populates the rest of the ordering
-    #       comparison operators
+    # For total ordering decorator, need to implement < and == and then totalordering correctly populates the rest
+    #       of the ordering comparison operators
     def __lt__(self, other: object) -> bool | type(NotImplemented):
         if not isinstance(other, CruiseSailing):
             return NotImplemented
@@ -73,11 +73,16 @@ class CruiseSailing:
 
         return self.sailing_date_start < other.sailing_date_start
 
+
     def __eq__(self, other: object) -> bool | type(NotImplemented):
         if not isinstance(other, CruiseSailing):
             return NotImplemented
 
+        # If dates aren't equal, exit early to save building strings
+        if self.sailing_date_start != other.sailing_date_start:
+            return False
+
         our_compare_str: str = f"{self.cruise_line_name} {self.cruise_ship_name}".lower()
         other_compare_str: str = f"{other.cruise_line_name} {other.cruise_ship_name}".lower()
 
-        return self.sailing_date_start == other.sailing_date_start and our_compare_str == other_compare_str
+        return our_compare_str == other_compare_str
