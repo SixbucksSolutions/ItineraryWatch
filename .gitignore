@@ -219,3 +219,6 @@ __marimo__/
 
 # Jetbrains
 .idea/
+
+# Our "DB"
+db/

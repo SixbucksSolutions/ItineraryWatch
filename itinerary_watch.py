@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import pathlib
 import typing
 import urllib.parse
 import uuid
@@ -108,7 +109,7 @@ def _valid_url(possible_url: str) -> bool:
         return False
 
 
-def _scrape_search_url(url: str, _url_id: uuid.UUID) -> None:
+def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
     try:
         search_url_details: dict[str, typing.Any] = _get_search_url_details(url)
     except Exception as e:
@@ -134,8 +135,21 @@ def _scrape_search_url(url: str, _url_id: uuid.UUID) -> None:
         cruise_sailing.serialize_cruise_sailing(sailing) for sailing in returned_matches
     ]
 
-    _logger.debug(f"Serialized search results: {json.dumps(serialized_matches,  
-                                                           indent=4, sort_keys=True)}")
+    # Retrieve latest unique search results for this search from DB, if any
+    search_results_to_compare_against: list[dict] | None = _get_latest_serialized_search_results_for_query(
+        url_id
+    )
+
+    # Did search results change?
+    if serialized_matches == search_results_to_compare_against:
+        _logger.info("Our serialized data exactly matches most recent from \"DB\", nothing more to do")
+        return
+
+    # Write these search results out
+    _write_new_search_results_to_db(url_id, serialized_matches)
+
+    # TODO: Notify customers monitoring this search
+    # raise NotImplementedError("Don't not exist yet nossir")
 
 
 def _get_search_url_details(url: str) -> dict[str, typing.Any]:
@@ -149,6 +163,52 @@ def _get_search_url_details(url: str) -> dict[str, typing.Any]:
             second=0,
             tzinfo=datetime.timezone.utc),
     }
+
+
+def _get_latest_serialized_search_results_for_query(url_id: uuid.UUID) -> list[dict] | None:
+    # May be S3 in the future, local disk for now
+    dir_for_this_url: pathlib.Path = pathlib.Path("db/monitored_urls") / str(url_id)
+
+    if not dir_for_this_url.exists():
+        return None
+
+    # Make sure it IS a dir
+    if not dir_for_this_url.is_dir():
+        raise RuntimeError(f"\"DB\" path for monitored URL {str(url_id)} exists but isn't a directory!?!?!?!")
+
+    dir_json_contents: list[pathlib.Path] = list(dir_for_this_url.glob("*.json"))
+
+    if len(dir_json_contents) == 0:
+        return None
+
+    # Filenames are ISO 8601 datetimes, return contents of not recent
+    most_recent_json_path: pathlib.Path = sorted(dir_json_contents, reverse=True)[0]
+
+    _logger.debug(f"Most recent search results for search URL {str(url_id)}: {most_recent_json_path.stem}")
+
+    with open(most_recent_json_path) as state_json_handle:
+        parsed_json_contents: list[dict] = json.load(state_json_handle)
+
+    return parsed_json_contents
+
+
+def _write_new_search_results_to_db(url_id: uuid.UUID, serializable_search_results: list[dict]) -> None:
+    dir_for_this_url: pathlib.Path = pathlib.Path("db/monitored_urls") / str(url_id)
+
+    if not dir_for_this_url.exists():
+        # Create it with all parents
+        dir_for_this_url.mkdir(parents=True)
+    elif not dir_for_this_url.is_dir():
+       raise RuntimeError(f"\"DB\" path for monitored URL {str(url_id)} exists but isn't a directory!?!?!?!")
+
+    # Now we know the dir existed previously OR we created it, write out state with current UTC timestamp
+    json_file_path: pathlib.Path = dir_for_this_url / \
+                     f"{datetime.datetime.now(tz=datetime.timezone.utc).isoformat(sep=" ", timespec="seconds")}.json"
+
+    with open(json_file_path, "w") as state_json_handle:
+        json.dump(serializable_search_results, state_json_handle, indent=4)
+
+    _logger.info(f"Wrote new search results for URL {str(url_id)} to {json_file_path}")
 
 
 if __name__ == "__main__":
