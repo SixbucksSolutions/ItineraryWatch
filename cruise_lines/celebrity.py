@@ -250,6 +250,8 @@ class Celebrity:
                     )
                 )
 
+            Celebrity._logger.info(f"Finished processing for itinerary: {str(parsed_sailings[-1])}")
+
         return parsed_sailings
 
     @staticmethod
@@ -421,6 +423,5 @@ class Celebrity:
                 continue
 
             raise NotImplementedError("No logic to handle this day")
-
 
         return sailing_day_breakdown
