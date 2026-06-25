@@ -64,16 +64,20 @@ class CruiseSailing:
         if not isinstance(other, CruiseSailing):
             return NotImplemented
 
-        # Sort order: first on sailing start date, if equal, by strict alpha comparison on *lowercase* ship names
+        # Sort order: first on sailing start date, if equal, by strict alpha comparison on
+        #       *lowercase* cruise line name + ship name string (e.g. all Celebrity ships come before all Virgin)
         if self.sailing_date_start == other.sailing_date_start:
-            return self.cruise_ship_name.lower() < other.cruise_ship_name.lower()
+            our_compare_str: str = f"{self.cruise_line_name} {self.cruise_ship_name}".lower()
+            other_compare_str: str = f"{other.cruise_line_name} {other.cruise_ship_name}".lower()
+            return our_compare_str < other_compare_str
 
         return self.sailing_date_start < other.sailing_date_start
-
 
     def __eq__(self, other: object) -> bool | type(NotImplemented):
         if not isinstance(other, CruiseSailing):
             return NotImplemented
 
-        return self.sailing_date_start == other.sailing_date_start and \
-            self.cruise_ship_name.lower() == other.cruise_ship_name.lower()
+        our_compare_str: str = f"{self.cruise_line_name} {self.cruise_ship_name}".lower()
+        other_compare_str: str = f"{other.cruise_line_name} {other.cruise_ship_name}".lower()
+
+        return self.sailing_date_start == other.sailing_date_start and our_compare_str == other_compare_str
