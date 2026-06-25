@@ -128,7 +128,14 @@ def _scrape_search_url(url: str, _url_id: uuid.UUID) -> None:
     _logger.info(f"Running search on URL {url} as it's never been scraped or >= 24 hours ago")
 
     returned_matches: list[cruise_sailing.CruiseSailing] = cruise_lines.Celebrity.perform_itinerary_search(url)
-    _logger.debug(json.dumps(returned_matches, indent=4, sort_keys=True, default=str))
+    # _logger.debug(json.dumps(returned_matches, indent=4, sort_keys=True, default=str))
+
+    serialized_matches: list[dict] = [
+        cruise_sailing.serialize_cruise_sailing(sailing) for sailing in returned_matches
+    ]
+
+    _logger.debug(f"Serialized search results: {json.dumps(serialized_matches,  
+                                                           indent=4, sort_keys=True)}")
 
 
 def _get_search_url_details(url: str) -> dict[str, typing.Any]:
@@ -142,6 +149,7 @@ def _get_search_url_details(url: str) -> dict[str, typing.Any]:
             second=0,
             tzinfo=datetime.timezone.utc),
     }
+
 
 if __name__ == "__main__":
 

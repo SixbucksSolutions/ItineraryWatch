@@ -1,6 +1,7 @@
 import datetime
 import enum
 import functools
+import json
 import logging
 import typing
 
@@ -36,10 +37,10 @@ class CruiseSailing:
 
         self.day_details = day_details
 
-        self._id: str = f"sailing.{self.cruise_line_code}.{self.cruise_ship_code}." + \
+        self.id: str = f"sailing.{self.cruise_line_code}.{self.cruise_ship_code}." + \
                         f"{self.sailing_date_start.isoformat()}.{self.sailing_date_end.isoformat()}"
 
-        self._logger = logging.getLogger(self._id)
+        self._logger = logging.getLogger(self.id)
         self._logger.setLevel(logging_level)
 
 
@@ -47,7 +48,7 @@ class CruiseSailing:
         """
         :return: code-parsable string representation of the object
         """
-        return self._id
+        return self.id
 
 
     def __str__(self: typing.Any) -> str:
@@ -86,3 +87,69 @@ class CruiseSailing:
         other_compare_str: str = f"{other.cruise_line_name} {other.cruise_ship_name}".lower()
 
         return our_compare_str == other_compare_str
+
+
+def serialize_cruise_sailing(sailing: CruiseSailing) -> dict:
+    if not isinstance(sailing, CruiseSailing):
+        raise ValueError(f"sailing must be CruiseSailing, not {type(sailing)}")
+
+    day_details: list[dict] = []
+
+    activity_type_encodings: dict[cruise_day_detail.ActivityType, str] = {
+        cruise_day_detail.ActivityType.PORT_EMBARK: "PORT_EMBARK",
+        cruise_day_detail.ActivityType.PORT_DEBARK: "PORT_DEBARK",
+        cruise_day_detail.ActivityType.PORT_DOCKED: "PORT_DOCKED",
+        cruise_day_detail.ActivityType.PORT_TENDERED: "PORT_TENDERED",
+        cruise_day_detail.ActivityType.PORT_CRUISING: "PORT_CRUISING",
+        cruise_day_detail.ActivityType.AT_SEA: "AT_SEA",
+    }
+
+    for day in sailing.day_details:
+        serialized_activities: list[dict] = []
+        for activity in day.activities:
+            start_value: str | None
+            end_value: str | None
+            if activity.activity_start_time:
+                start_value = activity.activity_start_time.isoformat()
+            else:
+                start_value = None
+
+            if activity.activity_end_time:
+                end_value = activity.activity_end_time.isoformat()
+            else:
+                end_value = None
+
+            location_name: str | None
+            location_region: str | None
+
+            if activity.activity_location:
+                location_name = activity.activity_location.name
+                location_region = activity.activity_location.region
+            else:
+                location_name = None
+                location_region = None
+
+            serialized_activities.append(
+                {
+                    "type"          : activity_type_encodings[activity.activity_type],
+                    "time_start"    : start_value,
+                    "time_end"      : end_value,
+                    "location"      : {
+                        "name"          : location_name,
+                        "region"        : location_region,
+                    }
+                }
+            )
+
+        # Add this day plus activities to day details
+        day_details.append(
+            {
+                "date"          : day.date.isoformat(),
+                "activities"    : serialized_activities,
+            }
+        )
+
+    return {
+        "id"            : sailing.id,
+        "day_details"   : day_details,
+    }

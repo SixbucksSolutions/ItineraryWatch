@@ -359,7 +359,7 @@ class Celebrity:
                         if curr_activity["activity"] == "DOCKED":
                             activity_type = cruise_day_detail.ActivityType.PORT_DOCKED
                         elif curr_activity["activity"] == "TENDERED":
-                            activity_type = cruise_day_detail.ActivityType.PORT_TENDERING
+                            activity_type = cruise_day_detail.ActivityType.PORT_TENDERED
                         elif curr_activity["activity"] == "CRUISING":
                             activity_type = cruise_day_detail.ActivityType.PORT_CRUISING
                         else:
