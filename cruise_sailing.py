@@ -8,7 +8,7 @@ import cruise_lines
 
 
 class CruiseSailing:
-    def __init__(self: typing.Self,
+    def __init__(self,
                  cruise_line_code: cruise_lines.CruiseLineCode,
                  cruise_ship_code: enum.Enum,
                  cruise_ship_name: str,

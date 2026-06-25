@@ -1,11 +1,13 @@
 import datetime
 import enum
+import json
 import logging
 import requests
 import time
 import typing
 import urllib.parse
 
+import cruise_day_detail
 import cruise_lines
 import cruise_sailing
 
@@ -230,8 +232,9 @@ class Celebrity:
                 start_date: datetime.date = datetime.date.fromisoformat(curr_itinerary_sailing["startDate"])
                 end_date: datetime.date = datetime.date.fromisoformat(curr_itinerary_sailing["endDate"])
 
-                # TODO: build day list
-                day_list = []
+                activities_per_day: list[cruise_day_detail.CruiseDayDetail] = Celebrity._parse_day_details(
+                    master_sailing_graphql_node, curr_itinerary_sailing
+                )
 
                 parsed_sailings.append(
                     cruise_sailing.CruiseSailing(
@@ -242,9 +245,182 @@ class Celebrity:
                         itinerary_name,
                         start_date,
                         end_date,
-                        day_list,
+                        activities_per_day,
                         logging_level,
                     )
                 )
 
         return parsed_sailings
+
+    @staticmethod
+    def _parse_day_details(master_sailing_graphql_node: dict[str, typing.Any],
+                           curr_itinerary_sailing: dict[str, typing.Any]) -> list[cruise_day_detail.CruiseDayDetail]:
+
+        master_sailing_days: list[dict[str, typing.Any]] = master_sailing_graphql_node["itinerary"]["days"]
+
+        sailing_date_start: datetime.date = datetime.date.fromisoformat(curr_itinerary_sailing["startDate"])
+        sailing_date_end: datetime.date = datetime.date.fromisoformat(curr_itinerary_sailing["endDate"])
+
+        Celebrity._logger.debug(f"Sailing dates: {sailing_date_start.isoformat()} to {sailing_date_end.isoformat()}")
+        # Celebrity._logger.debug(
+        #     f"Day breakdown: {json.dumps(master_sailing_days, indent=4, sort_keys=True)}")
+
+        sailing_day_breakdown: list[cruise_day_detail.CruiseDayDetail] = []
+
+        for day_number, day_api_details in enumerate(master_sailing_days, start=1):
+            Celebrity._logger.debug(f"Processing day number {day_number} with details: {json.dumps(day_api_details, 
+                indent=4, sort_keys=True)}")
+
+            # Embark day
+            if day_number == 1:
+                # Sanity check rest of the entry
+                if day_api_details["type"] != "PORT" or \
+                        len(day_api_details["ports"]) != 1 or\
+                        day_api_details["ports"][0]["activity"] != "EMBARK" or \
+                        day_api_details["ports"][0]["arrivalTime"] is not None or \
+                        day_api_details["ports"][0]["departureTime"] is None:
+
+                    raise RuntimeError( "Unsupported API data for embark day: "
+                                       f"{json.dumps(day_api_details, indent=4, sort_keys=True)}")
+
+                # Add embark details
+                sailing_day_breakdown.append(
+                    cruise_day_detail.CruiseDayDetail(
+                        sailing_date_start,
+                        [
+                            cruise_day_detail.ShipActivity(
+                                cruise_day_detail.ActivityType.PORT_EMBARK,
+                                activity_end_time=datetime.time.fromisoformat(
+                                    day_api_details["ports"][0]["departureTime"]),
+                                activity_location=cruise_day_detail.ShipActivityLocation(
+                                    day_api_details["ports"][0]["port"]["name"],
+                                    day_api_details["ports"][0]["port"]["region"]
+                                ),
+                            ),
+                        ]
+                    )
+                )
+
+                Celebrity._logger.debug(f"Added embark day: {str(sailing_day_breakdown[-1])}")
+
+                continue
+
+            # Mid-cruise, full day at sea
+            if day_api_details["type"] == "CRUISING":
+
+                # Input validation
+                if len(day_api_details["ports"]) != 1 or \
+                        day_api_details["ports"][0]["activity"] != "CRUISING" or \
+                        day_api_details["ports"][0]["arrivalTime"] is not None or \
+                        day_api_details["ports"][0]["departureTime"] is not None or \
+                        day_api_details["ports"][0]["port"]["code"] != "ASE" or \
+                        day_api_details["ports"][0]["port"]["name"] != "Cruising" or \
+                        day_api_details["ports"][0]["port"]["region"] is not None:
+
+                    raise RuntimeError("Unsupported API data for at sea day: "
+                                       f"{json.dumps(day_api_details, indent=4, sort_keys=True)}")
+
+                # Add full day at sea
+                sailing_day_breakdown.append(
+                    cruise_day_detail.CruiseDayDetail(
+                        sailing_date_start + datetime.timedelta(days=day_number - 1),
+                        [
+                            cruise_day_detail.ShipActivity(
+                                cruise_day_detail.ActivityType.AT_SEA,
+                            ),
+                        ]
+                    )
+                )
+
+                Celebrity._logger.debug(f"Added at sea day: {str(sailing_day_breakdown[-1])}")
+
+                continue
+
+            # Mid-cruise, one or more stops
+            if day_api_details["type"] in ["PORT", "MULTI_PORT"]:
+
+                # Input validation
+                if len(day_api_details["ports"]) < 1:
+                    raise RuntimeError("Need at least one port entry for port day day: "
+                                       f"{json.dumps(day_api_details, indent=4, sort_keys=True)}")
+
+                day_activities: list[cruise_day_detail.ShipActivity] = []
+
+                for curr_activity in day_api_details["ports"]:
+                    if curr_activity["activity"] in ["DOCKED", "TENDERED", "CRUISING"]:
+                        if curr_activity["arrivalTime"] is None or \
+                                curr_activity["departureTime"] is None:
+                            raise RuntimeError( "Unsupported API data for at activity during port day: "
+                                               f"{json.dumps(curr_activity, indent=4, sort_keys=True)}")
+
+                        activity_type: cruise_day_detail.ActivityType
+                        if curr_activity["activity"] == "DOCKED":
+                            activity_type = cruise_day_detail.ActivityType.PORT_DOCKED
+                        elif curr_activity["activity"] == "TENDERED":
+                            activity_type = cruise_day_detail.ActivityType.PORT_TENDERING
+                        elif curr_activity["activity"] == "CRUISING":
+                            activity_type = cruise_day_detail.ActivityType.PORT_CRUISING
+                        else:
+                            raise RuntimeError( "Unsupported activity type: "
+                                               f"{json.dumps(curr_activity, indent=4, sort_keys=True)}")
+
+                        day_activities.append(
+                            cruise_day_detail.ShipActivity(
+                                activity_type=activity_type,
+                                activity_start_time=datetime.time.fromisoformat(
+                                    curr_activity["arrivalTime"]),
+                                activity_end_time=datetime.time.fromisoformat(
+                                    curr_activity["departureTime"]),
+                                activity_location=cruise_day_detail.ShipActivityLocation(
+                                    curr_activity["port"]["name"],
+                                    curr_activity["port"]["region"]
+                                ),
+
+                            )
+                        )
+
+                    elif curr_activity["activity"] == "DEBARK":
+                        if curr_activity["arrivalTime"] is None or \
+                                curr_activity["departureTime"] is not None:
+                            raise RuntimeError( "Unsupported API data for at debark day: "
+                                               f"{json.dumps(curr_activity, indent=4, sort_keys=True)}")
+
+                        day_activities.append(
+                            cruise_day_detail.ShipActivity(
+                                activity_type=cruise_day_detail.ActivityType.PORT_DEBARK,
+                                activity_start_time=datetime.time.fromisoformat(
+                                    curr_activity["arrivalTime"]),
+                                activity_location=cruise_day_detail.ShipActivityLocation(
+                                    curr_activity["port"]["name"],
+                                    curr_activity["port"]["region"]
+                                ),
+                            )
+                        )
+
+                    else:
+                        raise ValueError( "Unsupported activity type for a port day: "
+                                         f"{json.dumps(curr_activity, indent=4, sort_keys=True)}")
+
+                if len(day_activities) == 0:
+                    raise RuntimeError( "Did not process any activities out of: "
+                                        f"{json.dumps(day_api_details, indent=4, sort_keys=True)}")
+
+                # Add day with all its activities
+                sailing_day_breakdown.append(
+                    cruise_day_detail.CruiseDayDetail(
+                        sailing_date_start + datetime.timedelta(days=day_number - 1),
+                        day_activities,
+                    )
+                )
+
+                if day_activities[-1].activity_type != cruise_day_detail.ActivityType.PORT_DEBARK:
+                    Celebrity._logger.debug(f"Added port day: {str(sailing_day_breakdown[-1])}")
+                else:
+                    Celebrity._logger.debug(f"Added debark day: {str(sailing_day_breakdown[-1])}")
+
+                continue
+
+            raise NotImplementedError("No logic to handle this day")
+
+
+        return sailing_day_breakdown

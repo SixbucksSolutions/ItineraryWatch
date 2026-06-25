@@ -12,6 +12,8 @@ class ShipActivityLocation:
 class ActivityType(enum.Enum):
     PORT_EMBARK     = enum.auto()
     PORT_DOCKED     = enum.auto()
+    PORT_TENDERING  = enum.auto()
+    PORT_CRUISING   = enum.auto()
     PORT_DEBARK     = enum.auto()
     AT_SEA          = enum.auto()
 
@@ -28,3 +30,7 @@ class ShipActivity:
 class CruiseDayDetail:
     date: datetime.date
     activities: list[ShipActivity] = dataclasses.field(default_factory=list)
+
+
+    def __str__(self) -> str:
+        return f"Date {self.date.isoformat()} with {len(self.activities)} activities"
