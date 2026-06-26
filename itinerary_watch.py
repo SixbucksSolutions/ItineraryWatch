@@ -9,6 +9,7 @@ import uuid
 import aws_lambda_powertools.utilities.data_classes
 import aws_lambda_powertools.utilities.data_classes.sns_event
 import aws_lambda_powertools.utilities.typing
+import boto3
 
 import cruise_lines
 import cruise_sailing
@@ -16,6 +17,9 @@ import cruise_sailing
 
 _logger: logging.Logger = logging.getLogger("itinerary_watch")
 _logger.setLevel(logging.DEBUG)
+
+_ssm_client = boto3.client("ssm", region_name="us-east-2")
+_s3_client = boto3.client("s3", region_name="us-east-2")
 
 
 def sns_message_entry_point(event: aws_lambda_powertools.utilities.data_classes.SNSEvent,
@@ -110,23 +114,7 @@ def _valid_url(possible_url: str) -> bool:
 
 
 def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
-    try:
-        search_url_details: dict[str, typing.Any] = _get_search_url_details(url)
-    except Exception as e:
-        _logger.warning(f"Could not get last scrape time for URL {url}, error: {e}")
-        return
-
-    last_scrape_attempt: datetime.datetime = search_url_details["last_scrape_attempt"]
-
-    if last_scrape_attempt is not None:
-        now_utc: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)
-        time_difference: datetime.timedelta = now_utc - last_scrape_attempt
-
-        if time_difference < datetime.timedelta(hours=24):
-            _logger.info(f"Ignoring scrape request for URL {url}, has not been 24 hours since previous")
-            return
-
-    _logger.info(f"Running search on URL {url} as it's never been scraped or >= 24 hours ago")
+    _logger.info(f"Running search on URL {url}")
 
     returned_matches: list[cruise_sailing.CruiseSailing] = cruise_lines.Celebrity.perform_itinerary_search(url)
     # _logger.debug(json.dumps(returned_matches, indent=4, sort_keys=True, default=str))
@@ -135,9 +123,12 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
         cruise_sailing.serialize_cruise_sailing(sailing) for sailing in returned_matches
     ]
 
+    app_s3_bucket_name: str = _read_parameter_store_param("/itinerary_watch/s3/bucket_name")
+    # _logger.debug(f"S3 bucket name for DB: {app_s3_bucket_name}")
+
     # Retrieve latest unique search results for this search from DB, if any
     search_results_to_compare_against: list[dict] | None = _get_latest_serialized_search_results_for_query(
-        url_id
+        app_s3_bucket_name, url_id
     )
 
     # Did search results change?
@@ -148,7 +139,7 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
     _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
 
     # Write these search results out
-    _write_new_search_results_to_db(url_id, serialized_matches)
+    _write_new_search_results_to_db(url_id, serialized_matches, app_s3_bucket_name)
 
     # TODO: Notify customers monitoring this search
     # raise NotImplementedError("Don't not exist yet nossir")
@@ -167,50 +158,75 @@ def _get_search_url_details(url: str) -> dict[str, typing.Any]:
     }
 
 
-def _get_latest_serialized_search_results_for_query(url_id: uuid.UUID) -> list[dict] | None:
-    # May be S3 in the future, local disk for now
-    dir_for_this_url: pathlib.Path = pathlib.Path("db/monitored_urls") / str(url_id)
+def _read_parameter_store_param(parameter_name: str) -> str:
+    return _ssm_client.get_parameter(Name=parameter_name)['Parameter']['Value']
 
-    if not dir_for_this_url.exists():
-        return None
 
-    # Make sure it IS a dir
-    if not dir_for_this_url.is_dir():
-        raise RuntimeError(f"\"DB\" path for monitored URL {str(url_id)} exists but isn't a directory!?!?!?!")
+def _s3_glob(bucket_name: str, prefix_to_search: str, file_extension: str) -> typing.Iterator[str]:
+    # Create a paginator to handle buckets with thousands of files
+    paginator = _s3_client.get_paginator("list_objects_v2")
 
-    dir_json_contents: list[pathlib.Path] = list(dir_for_this_url.glob("*.json"))
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix_to_search):
+       # Check if the prefix actually contains any objects
+        if "Contents" in page:
+            for obj in page["Contents"]:
+                key = obj["Key"]
+                # Filter for files ending in .json
+                if key.endswith(file_extension):
+                    yield key
 
-    if len(dir_json_contents) == 0:
+
+def _get_latest_serialized_search_results_for_query(app_s3_bucket_name: str, url_id: uuid.UUID) -> list[dict] | None:
+
+    # List *.json for this monitored URL
+    prefix_to_search: str = f"db/monitored_urls/{str(url_id)}/"
+    search_result_state_files: list[str] = list(_s3_glob(app_s3_bucket_name,
+                                                prefix_to_search,
+                                                ".json"))
+    if len(search_result_state_files) == 0:
         return None
 
     # Filenames are ISO 8601 datetimes, return contents of not recent
-    most_recent_json_path: pathlib.Path = sorted(dir_json_contents, reverse=True)[0]
+    most_recent_state_file: str = sorted(search_result_state_files, reverse=True)[0]
 
-    _logger.debug(f"Most recent search results in DB have timestamp: {most_recent_json_path.stem}")
+    # Get just the filename after the last slash
+    filename: str = most_recent_state_file.split("/")[-1]
+    # Remove the '.json' extension
+    timestamp_str: str = filename.replace(".json", "")
 
-    with open(most_recent_json_path) as state_json_handle:
-        parsed_json_contents: list[dict] = json.load(state_json_handle)
+    state_file_timestamp: datetime.datetime = datetime.datetime.fromisoformat(timestamp_str)
+
+    _logger.debug("Timestamp of most recent search results for this URL in S3: " +
+                  state_file_timestamp.isoformat(sep=" ", timespec="minutes") )
+
+    # Fetch the object from S3
+    response = _s3_client.get_object(Bucket=app_s3_bucket_name, Key=most_recent_state_file)
+
+    # Read the StreamingBody and decode bytes to a string
+    file_content: str = response["Body"].read().decode("utf-8")
+
+    parsed_json_contents: list[dict] = json.loads(file_content)
 
     return parsed_json_contents
 
 
-def _write_new_search_results_to_db(url_id: uuid.UUID, serializable_search_results: list[dict]) -> None:
-    dir_for_this_url: pathlib.Path = pathlib.Path("db/monitored_urls") / str(url_id)
+def _write_new_search_results_to_db(url_id: uuid.UUID,
+                                    serializable_search_results: list[dict],
+                                    s3_bucket_name: str) -> None:
 
-    if not dir_for_this_url.exists():
-        # Create it with all parents
-        dir_for_this_url.mkdir(parents=True)
-    elif not dir_for_this_url.is_dir():
-       raise RuntimeError(f"\"DB\" path for monitored URL {str(url_id)} exists but isn't a directory!?!?!?!")
+    s3_key: str = f"db/monitored_urls/{str(url_id)}/" + \
+                  f"{datetime.datetime.now(tz=datetime.timezone.utc).isoformat(sep=" ", timespec="minutes")}.json"
 
-    # Now we know the dir existed previously OR we created it, write out state with current UTC timestamp
-    json_file_path: pathlib.Path = dir_for_this_url / \
-                     f"{datetime.datetime.now(tz=datetime.timezone.utc).isoformat(sep=" ", timespec="minutes")}.json"
+    serialized_contents: str = json.dumps(serializable_search_results)
 
-    with open(json_file_path, "w") as state_json_handle:
-        json.dump(serializable_search_results, state_json_handle, indent=4)
+    _s3_client.put_object(
+        Bucket=s3_bucket_name,
+        Key=s3_key,
+        Body=serialized_contents,
+        ContentType="application/json"  # Adjust content type based on your file format
+    )
 
-    _logger.info(f"Wrote new search results for URL {str(url_id)} to {json_file_path}")
+    _logger.info(f"Wrote new search results for URL {str(url_id)} to s3://{s3_bucket_name}/{s3_key}")
 
 
 if __name__ == "__main__":
