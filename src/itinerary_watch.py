@@ -1,7 +1,6 @@
 import datetime
 import json
 import logging
-import pathlib
 import typing
 import urllib.parse
 import uuid
@@ -29,7 +28,9 @@ def sns_message_entry_point(event: aws_lambda_powertools.utilities.data_classes.
         _process_sns_event_record(curr_event_record)
 
 
-def _process_sns_event_record(curr_record: aws_lambda_powertools.utilities.data_classes.sns_event.SNSEventRecord) -> None:
+def _process_sns_event_record(
+        curr_record: aws_lambda_powertools.utilities.data_classes.sns_event.SNSEventRecord) -> None:
+
     curr_sns_message_id: uuid.UUID = uuid.UUID(curr_record.sns.message_id)
     _logger.info(f"Starting to process new SNS message with ID {str(curr_sns_message_id)}")
 
@@ -133,13 +134,15 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
 
     # Did search results change?
     if serialized_matches == search_results_to_compare_against:
-        _logger.info("Our serialized data exactly matches most recent state in DB, nothing more to do")
+        _logger.info("Our serialized data exactly matches most recent state S3, nothing more to do")
         return
 
     _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
 
     # Write these search results out
-    _write_new_search_results_to_db(url_id, serialized_matches, app_s3_bucket_name)
+    _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
+
+    # Update last search run timestamp in DB
 
     # TODO: Notify customers monitoring this search
     # raise NotImplementedError("Don't not exist yet nossir")
@@ -210,9 +213,9 @@ def _get_latest_serialized_search_results_for_query(app_s3_bucket_name: str, url
     return parsed_json_contents
 
 
-def _write_new_search_results_to_db(url_id: uuid.UUID,
-                                    serializable_search_results: list[dict],
-                                    s3_bucket_name: str) -> None:
+def _write_new_search_results(url_id: uuid.UUID,
+                              serializable_search_results: list[dict],
+                              s3_bucket_name: str) -> None:
 
     s3_key: str = f"db/monitored_urls/{str(url_id)}/" + \
                   f"{datetime.datetime.now(tz=datetime.timezone.utc).isoformat(sep=" ", timespec="minutes")}.json"
