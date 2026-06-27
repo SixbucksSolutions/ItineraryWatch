@@ -250,7 +250,7 @@ def _update_db_last_search_time(url_id: uuid.UUID) -> None:
     # _logger.debug(f"Postgres connection params: {json.dumps(postgres_connection_params, indent=4)}")
 
     try:
-        # don't need anything to close when using context manager syntax ("with")
+        # Context manager syntax ("with") gets the connection auto-closed at scope exit
         with psycopg.connect(
                     host=postgres_connection_params["db_hostname"],
                     dbname=postgres_connection_params["db_dbname"],
@@ -260,9 +260,9 @@ def _update_db_last_search_time(url_id: uuid.UUID) -> None:
                     sslrootcert="./aws-rds-global-bundle.pem",
                 ) as conn:
 
-            # Context managers for cursors ensure they close automatically
+            # Context managers for cursors ensure they *also* close automatically
             with conn.cursor() as cur:
-                cur.execute("SELECT version();")
+                cur.execute("UPDATE version();")
                 print(cur.fetchone()[0])
 
     except Exception as e:
