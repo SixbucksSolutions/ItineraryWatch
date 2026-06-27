@@ -170,7 +170,7 @@ def _read_parameter_store_param(parameter_name: str) -> str:
 
 def _read_parameter_store_params(parameter_names: list[str]) -> dict[str, str]:
     retrieved_params: list[dict] = _ssm_client.get_parameters(Names=parameter_names)['Parameters']
-    _logger.debug(f"Retrieved params: {retrieved_params}")
+    # _logger.debug(f"Retrieved params: {retrieved_params}")
     return_dict: dict[str, str] = {}
     for param_idx, param_details in enumerate(retrieved_params):
         return_dict[param_details['Name']] = retrieved_params[param_idx]['Value']
@@ -247,7 +247,7 @@ def _write_new_search_results(url_id: uuid.UUID,
 def _update_db_last_search_time(url_id: uuid.UUID) -> None:
     # Read Postgres connection details from Parameter Store
     postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
-    _logger.debug(f"Postgres connection params: {json.dumps(postgres_connection_params, indent=4)}")
+    # _logger.debug(f"Postgres connection params: {json.dumps(postgres_connection_params, indent=4)}")
 
     try:
         # don't need anything to close when using context manager syntax ("with")
