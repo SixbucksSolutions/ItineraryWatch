@@ -9,6 +9,7 @@ import aws_lambda_powertools.utilities.data_classes
 import aws_lambda_powertools.utilities.data_classes.sns_event
 import aws_lambda_powertools.utilities.typing
 import boto3
+import psycopg
 
 import cruise_lines
 import cruise_sailing
@@ -140,9 +141,11 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
     _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
 
     # Write these search results out
-    _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
+    # TODO: uncomment!
+    # _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
 
-    # Update last search run timestamp in DB
+    # Update last run timestamp for this search URL in app DB
+    _update_db_last_search_time(url_id)
 
     # TODO: Notify customers monitoring this search
     # raise NotImplementedError("Don't not exist yet nossir")
@@ -163,6 +166,15 @@ def _get_search_url_details(url: str) -> dict[str, typing.Any]:
 
 def _read_parameter_store_param(parameter_name: str) -> str:
     return _ssm_client.get_parameter(Name=parameter_name)['Parameter']['Value']
+
+
+def _read_parameter_store_params(parameter_names: list[str]) -> dict[str, str]:
+    retrieved_params: list[dict] = _ssm_client.get_parameters(Names=parameter_names)['Parameters']
+    _logger.debug(f"Retrieved params: {retrieved_params}")
+    return_dict: dict[str, str] = {}
+    for param_idx, param_details in enumerate(retrieved_params):
+        return_dict[param_details['Name']] = retrieved_params[param_idx]['Value']
+    return return_dict
 
 
 def _s3_glob(bucket_name: str, prefix_to_search: str, file_extension: str) -> typing.Iterator[str]:
@@ -230,6 +242,50 @@ def _write_new_search_results(url_id: uuid.UUID,
     )
 
     _logger.info(f"Wrote new search results for URL {str(url_id)} to s3://{s3_bucket_name}/{s3_key}")
+
+
+def _update_db_last_search_time(url_id: uuid.UUID) -> None:
+    # Read Postgres connection details from Parameter Store
+    postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
+    _logger.debug(f"Postgres connection params: {json.dumps(postgres_connection_params, indent=4)}")
+
+    try:
+        # don't need anything to close when using context manager syntax ("with")
+        with psycopg.connect(
+                    host=postgres_connection_params["db_hostname"],
+                    dbname=postgres_connection_params["db_dbname"],
+                    user=postgres_connection_params["db_user"],
+                    password=postgres_connection_params["db_password"],
+                    sslmode="verify-full",
+                    sslrootcert="./aws-rds-global-bundle.pem",
+                ) as conn:
+
+            # Context managers for cursors ensure they close automatically
+            with conn.cursor() as cur:
+                cur.execute("SELECT version();")
+                print(cur.fetchone()[0])
+
+    except Exception as e:
+        _logger.critical(f"Database error: {e}")
+        raise
+
+
+def _get_pg_server_connection_details() -> dict[str, str]:
+    db_params_keys: list[str] = [
+        "/itinerary_watch/postgres/db_hostname",
+        "/itinerary_watch/postgres/db_dbname",
+        "/itinerary_watch/postgres/db_user",
+        "/itinerary_watch/postgres/db_password",
+    ]
+
+    returned_params: dict[str, str] = _read_parameter_store_params(db_params_keys)
+
+    return_dict: dict[str, str] = {}
+    for curr_key in db_params_keys:
+        # shorten to final token
+        return_dict[curr_key.split("/")[-1]] = returned_params[curr_key]
+
+    return return_dict
 
 
 if __name__ == "__main__":
