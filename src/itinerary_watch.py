@@ -121,6 +121,9 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
     returned_matches: list[cruise_sailing.CruiseSailing] = cruise_lines.Celebrity.perform_itinerary_search(url)
     # _logger.debug(json.dumps(returned_matches, indent=4, sort_keys=True, default=str))
 
+    # Update last run timestamp for this search URL in app DB
+    _update_db_last_search_time(url_id)
+
     serialized_matches: list[dict] = [
         cruise_sailing.serialize_cruise_sailing(sailing) for sailing in returned_matches
     ]
@@ -141,11 +144,8 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
     _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
 
     # Write these search results out
-    # TODO: uncomment!
-    # _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
+    _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
 
-    # Update last run timestamp for this search URL in app DB
-    _update_db_last_search_time(url_id)
 
     # TODO: Notify customers monitoring this search
     # raise NotImplementedError("Don't not exist yet nossir")
@@ -262,8 +262,17 @@ def _update_db_last_search_time(url_id: uuid.UUID) -> None:
 
             # Context managers for cursors ensure they *also* close automatically
             with conn.cursor() as cur:
-                cur.execute("UPDATE version();")
-                print(cur.fetchone()[0])
+                cur.execute(
+                    """
+                    UPDATE  monitored_urls 
+                    SET     last_scrape_timestamp = NOW()
+                    WHERE   url_id = %s;
+                    """,
+
+                    (url_id, )
+                )
+
+            _logger.info("Updated last scrape time for this URL in DB")
 
     except Exception as e:
         _logger.critical(f"Database error: {e}")
