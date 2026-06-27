@@ -79,7 +79,7 @@ def _valid_json(parsed_payload: dict[str, int | str]) -> bool:
         return False
 
     supported_schema_datetimes: set[str] = {
-        "2026-06-24T15:00Z",
+        "2026-06-24 15:00+00:00",
     }
     if parsed_payload["schema_datetime"] not in supported_schema_datetimes:
         _logger.warning("Unsupported schema version")
@@ -304,7 +304,7 @@ if __name__ == "__main__":
                             "SigningCertUrl": "EXAMPLE",
                             "MessageId": "95df01b4-ee98-5cb9-9903-4c221d41eb5e",
                             "Message": "{" + \
-                                "\"schema_datetime\": \"2026-06-24T15:00Z\", " + \
+                                "\"schema_datetime\": \"2026-06-24 15:00+00:00\", " + \
                                 "\"monitored_url_id\": \"019ef9cf-e013-79bf-a299-a25f20e2f495\", " + \
                                 "\"monitored_url\": \"https://www.celebritycruises.com/cruises?search=nights:9~11,gte12|startDate:2028-01-01~2028-01-31|visiting:CARI&sort=by:NIGHTS|order:DESC&country=USA&currency=USD\"}",
                             "MessageAttributes": {},
