@@ -1,2 +1,2 @@
-SELECT * FROM index;:wq
+SELECT * FROM index;
 
