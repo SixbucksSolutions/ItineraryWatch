@@ -16,7 +16,7 @@ functions:
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/db_maintenance.lambda_entry_point_event_bridge
     memorySize: 256
-    timeout: 30 # Sets the timeout to 30 seconds
+    timeout: 20 # 20 second runtime in case
     package:
       # 2. Assign the patterns directly to the function to isolate the execution scope
       patterns:
