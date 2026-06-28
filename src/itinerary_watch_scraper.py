@@ -5,7 +5,6 @@ import typing
 import urllib.parse
 import uuid
 
-import aws_lambda_powertools.utilities.data_classes
 import aws_lambda_powertools.utilities.parser
 import aws_lambda_powertools.utilities.parser.models
 import aws_lambda_powertools.utilities.typing
