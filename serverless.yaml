@@ -12,7 +12,10 @@ package:
     - '!**'                       # Default is ignore everything
 
 functions:
+
   db_maintenance:
+    events:
+      - schedule: cron(1 0 * * ? *)   # EventBridge scheduled event at 00:01 UTC every day
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/db_maintenance.lambda_entry_point_event_bridge
     memorySize: 256
@@ -20,6 +23,17 @@ functions:
     package:
       patterns:
         - 'src/db_maintenance.py'
+        - 'src/aws-rds-global-bundle.pem'
+
+  scraper_launcher:
+    events:
+      - schedule: cron(0 * * * ? *)   # EventBridge scheduled event on the hour, every hour
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
+    handler: src/scraper_launcher.lambda_entry_point_event_bridge
+    timeout: 20 # 20 second runtime in case
+    package:
+      patterns:
+        - 'src/scraper_launcher.py'
         - 'src/aws-rds-global-bundle.pem'
 
 custom:
