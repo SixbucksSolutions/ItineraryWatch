@@ -8,7 +8,7 @@ import aws_lambda_powertools.utilities.typing
 import psycopg
 
 _logger: logging.Logger = logging.getLogger()
-_logger.setLevel(logging.DEBUG)
+_logger.setLevel(logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 
