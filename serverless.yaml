@@ -11,16 +11,17 @@ package:
   patterns:
     - '!**'                   # Default is ignore everything
 
-
-
 functions:
   db_maintenance:
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/db_maintenance.lambda_entry_point_event_bridge
+    memorySize: 256
+    timeout: 30 # Sets the timeout to 30 seconds
     package:
       # 2. Assign the patterns directly to the function to isolate the execution scope
       patterns:
-        - '!**'                   # Default is
         - 'src/db_maintenance.py' # 3. Explicitly bundle the target module file
+        - 'src/aws-rds-global-bundle.pem'
 
 custom:
   pythonRequirements:

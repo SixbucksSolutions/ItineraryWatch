@@ -26,13 +26,14 @@ def lambda_entry_point_event_bridge(_event: aws_lambda_powertools.utilities.data
 
     try:
         # Context manager syntax ("with") gets the connection auto-closed at scope exit
+
         with psycopg.connect(
                     host=postgres_connection_params["db_hostname"],
                     dbname=postgres_connection_params["db_dbname"],
                     user=postgres_connection_params["db_user"],
                     password=postgres_connection_params["db_password"],
                     sslmode="verify-full",
-                    sslrootcert="./aws-rds-global-bundle.pem",
+                    sslrootcert="src/aws-rds-global-bundle.pem",
                 ) as conn:
 
             # need to turn autocommit on so command is not run in a transaction block
@@ -45,7 +46,6 @@ def lambda_entry_point_event_bridge(_event: aws_lambda_powertools.utilities.data
             end_time = time.perf_counter()
 
             _logger.info(f"DB maintenance completed successfully in {end_time - start_time:.03f} seconds")
-
     except Exception as e:
         _logger.critical(f"Database error: {e}")
         raise
