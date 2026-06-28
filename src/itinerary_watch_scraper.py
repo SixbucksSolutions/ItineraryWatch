@@ -42,11 +42,11 @@ def lambda_entry_point_sns(event: dict[str, typing.Any],
 def _process_sns_event_record(
         curr_record: aws_lambda_powertools.utilities.parser.models.SnsRecordModel) -> None:
 
-    curr_sns_message_id: uuid.UUID = uuid.UUID(curr_record.Sns.message_id)
+    curr_sns_message_id: uuid.UUID = uuid.UUID(curr_record.Sns.MessageId)
     _logger.info(f"Starting to process new SNS message with ID {str(curr_sns_message_id)}")
 
     try:
-        parsed_payload: dict[str, int | str] = json.loads(curr_record.Sns.message)
+        parsed_payload: dict[str, int | str] = json.loads(curr_record.Sns.Message)
     except Exception as e:
         _logger.warning(f"Could not parse JSON from SNS message payload, error: {e}")
         return
@@ -267,7 +267,7 @@ def _update_db_last_search_time(url_id: uuid.UUID) -> None:
                     user=postgres_connection_params["db_user"],
                     password=postgres_connection_params["db_password"],
                     sslmode="verify-full",
-                    sslrootcert="./aws-rds-global-bundle.pem",
+                    sslrootcert="src/aws-rds-global-bundle.pem",
                 ) as conn:
 
             # Context managers for cursors ensure they *also* close automatically
