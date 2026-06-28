@@ -172,7 +172,7 @@ class Celebrity:
             """
 
         graphql_variables: dict[str, str | dict[str, str] | dict[str, int] | bool] = {
-            "filters": "nights:9~11,gte12|startDate:2028-01-01~2028-01-31|visiting:CARI",
+            "filters": graphql_filter_str,
             "currency": "USD",
             "pagination": {
                 "count": 25,
