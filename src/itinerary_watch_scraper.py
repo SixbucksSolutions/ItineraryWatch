@@ -6,6 +6,8 @@ import urllib.parse
 import uuid
 
 import aws_lambda_powertools.utilities.data_classes
+import aws_lambda_powertools.utilities.parser
+import aws_lambda_powertools.utilities.parser.models
 import aws_lambda_powertools.utilities.typing
 import boto3
 import psycopg
@@ -21,21 +23,30 @@ _ssm_client = boto3.client("ssm", region_name="us-east-2")
 _s3_client = boto3.client("s3", region_name="us-east-2")
 
 
-def lambda_entry_point_sns(event: aws_lambda_powertools.utilities.data_classes.SNSEvent,
+def lambda_entry_point_sns(event: dict[str, typing.Any],
                            _context: aws_lambda_powertools.utilities.typing.LambdaContext | None) -> None:
 
-    for curr_event_record in event.records:
+    _logger.debug(json.dumps(event, indent=4, sort_keys=True))
+
+    # Parse the outer AWS envelope
+    parsed_envelope: aws_lambda_powertools.utilities.parser.models.SnsModel = \
+            aws_lambda_powertools.utilities.parser.parse(
+        event=event,
+        model=aws_lambda_powertools.utilities.parser.models.SnsModel
+    )
+
+    for curr_event_record in parsed_envelope.Records:
         _process_sns_event_record(curr_event_record)
 
 
 def _process_sns_event_record(
-        curr_record: aws_lambda_powertools.utilities.data_classes.sns_event.SNSEventRecord) -> None:
+        curr_record: aws_lambda_powertools.utilities.parser.models.SnsRecordModel) -> None:
 
-    curr_sns_message_id: uuid.UUID = uuid.UUID(curr_record.sns.message_id)
+    curr_sns_message_id: uuid.UUID = uuid.UUID(curr_record.Sns.message_id)
     _logger.info(f"Starting to process new SNS message with ID {str(curr_sns_message_id)}")
 
     try:
-        parsed_payload: dict[str, int | str] = json.loads(curr_record.sns.message)
+        parsed_payload: dict[str, int | str] = json.loads(curr_record.Sns.message)
     except Exception as e:
         _logger.warning(f"Could not parse JSON from SNS message payload, error: {e}")
         return
