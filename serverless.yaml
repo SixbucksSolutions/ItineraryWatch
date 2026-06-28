@@ -8,6 +8,7 @@ provider:
   name: aws
   runtime: python3.14
   architecture: arm64
+  logRetentionInDays: 30
   logs:
     lambda:
       logFormat: Text
