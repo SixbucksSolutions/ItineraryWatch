@@ -6,24 +6,23 @@ import urllib.parse
 import uuid
 
 import aws_lambda_powertools.utilities.data_classes
-import aws_lambda_powertools.utilities.data_classes.sns_event
 import aws_lambda_powertools.utilities.typing
 import boto3
 import psycopg
 
-import cruise_lines
-import cruise_sailing
+from src import cruise_lines
+from src import cruise_sailing
 
 
-_logger: logging.Logger = logging.getLogger("itinerary_watch")
+_logger: logging.Logger = logging.getLogger()
 _logger.setLevel(logging.DEBUG)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 _s3_client = boto3.client("s3", region_name="us-east-2")
 
 
-def sns_message_entry_point(event: aws_lambda_powertools.utilities.data_classes.SNSEvent,
-                            _context: aws_lambda_powertools.utilities.typing.LambdaContext | None) -> None:
+def lambda_entry_point_sns(event: aws_lambda_powertools.utilities.data_classes.SNSEvent,
+                           _context: aws_lambda_powertools.utilities.typing.LambdaContext | None) -> None:
 
     for curr_event_record in event.records:
         _process_sns_event_record(curr_event_record)
@@ -295,36 +294,3 @@ def _get_pg_server_connection_details() -> dict[str, str]:
         return_dict[curr_key.split("/")[-1]] = returned_params[curr_key]
 
     return return_dict
-
-
-if __name__ == "__main__":
-
-    def _create_fake_sns_event() -> aws_lambda_powertools.utilities.data_classes.SNSEvent:
-        return aws_lambda_powertools.utilities.data_classes.SNSEvent(
-            {
-                "Records": [
-                    {
-                        "EventVersion": "1.0",
-                        "EventSubscriptionArn": "arn:aws:sns:us-east-1:123456789012:ExampleTopic:xxxx",
-                        "EventSource": "aws:sns",
-                        "Sns": {
-                            "SignatureVersion": "1",
-                            "Signature": "EXAMPLE",
-                            "SigningCertUrl": "EXAMPLE",
-                            "MessageId": "95df01b4-ee98-5cb9-9903-4c221d41eb5e",
-                            "Message": "{" + \
-                                "\"schema_datetime\": \"2026-06-24 15:00+00:00\", " + \
-                                "\"monitored_url_id\": \"019ef9cf-e013-79bf-a299-a25f20e2f495\", " + \
-                                "\"monitored_url\": \"https://www.celebritycruises.com/cruises?search=nights:9~11,gte12|startDate:2028-01-01~2028-01-31|visiting:CARI&sort=by:NIGHTS|order:DESC&country=USA&currency=USD\"}",
-                            "MessageAttributes": {},
-                            "Timestamp": "1970-01-01T00:00:00.000Z",
-                            "TopicArn": "arn:aws:sns:us-east-1:123456789012:ExampleTopic",
-                            "UnsubscribeUrl": "EXAMPLE"
-                        }
-                    }
-                ]
-            }
-        )
-
-    logging.basicConfig()
-    sns_message_entry_point(_create_fake_sns_event(), None)

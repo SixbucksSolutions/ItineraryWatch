@@ -7,7 +7,7 @@ import aws_lambda_powertools.utilities.typing
 
 import psycopg
 
-_logger: logging.Logger = logging.getLogger("itinerary_watch")
+_logger: logging.Logger = logging.getLogger()
 _logger.setLevel(logging.DEBUG)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
@@ -18,7 +18,7 @@ _ssm_client = boto3.client("ssm", region_name="us-east-2")
 def lambda_entry_point_event_bridge(_event: aws_lambda_powertools.utilities.data_classes.EventBridgeEvent,
                                     _context: aws_lambda_powertools.utilities.typing.LambdaContext | None) -> None:
 
-    _logger.info("Starting DB maintenance")
+    _logger.debug("Starting DB maintenance")
 
     # Read Postgres connection details from Parameter Store
     postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()

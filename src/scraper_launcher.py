@@ -9,8 +9,8 @@ import aws_lambda_powertools.utilities.typing
 
 import psycopg
 
-_logger: logging.Logger = logging.getLogger("scraper_launcher")
-_logger.setLevel(logging.DEBUG)
+_logger: logging.Logger = logging.getLogger()
+_logger.setLevel(logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 _sns_client = boto3.client("sns", region_name="us-east-2")
@@ -21,7 +21,7 @@ _sns_client = boto3.client("sns", region_name="us-east-2")
 def lambda_entry_point_event_bridge(_event: aws_lambda_powertools.utilities.data_classes.EventBridgeEvent,
                                     _context: aws_lambda_powertools.utilities.typing.LambdaContext | None) -> None:
 
-    _logger.info("Starting periodic scraper launcher")
+    _logger.debug("Starting periodic scraper launcher")
 
     # Read Postgres connection details from Parameter Store
     postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()

@@ -1,3 +1,6 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: firsttracks
+
 # serverless.yml
 service: itinerary-watch
 
@@ -5,6 +8,9 @@ provider:
   name: aws
   runtime: python3.14
   architecture: arm64
+  logs:
+    lambda:
+      logFormat: Text
 
 package:
   individually: true              # Packages all functions into their own independent ZIP file
@@ -19,7 +25,7 @@ functions:
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/db_maintenance.lambda_entry_point_event_bridge
     memorySize: 256
-    timeout: 20 # 20 second runtime in case
+    timeout: 20 # 20 second runtime to be safe
     package:
       patterns:
         - 'src/db_maintenance.py'
@@ -30,10 +36,24 @@ functions:
       - schedule: cron(0 * * * ? *)   # EventBridge scheduled event on the hour, every hour
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/scraper_launcher.lambda_entry_point_event_bridge
-    timeout: 20 # 20 second runtime in case
+    timeout: 20 # 20 second runtime to be safe
     package:
       patterns:
         - 'src/scraper_launcher.py'
+        - 'src/aws-rds-global-bundle.pem'
+
+  itinerary_watch_scraper:
+    events:
+      - sns: arn:aws:sns:us-east-2:293119271420:itinerary_watch_scraper_trigger
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
+    handler: src/itinerary_watch_scraper.lambda_entry_point_sns
+    timeout: 60
+    package:
+      patterns:
+        - 'src/itinerary_watch_scraper.py'
+        - 'src/cruise_day_detail.py'
+        - 'src/cruise_sailing.py'
+        - 'src/cruise_lines/*.py'
         - 'src/aws-rds-global-bundle.pem'
 
 custom:

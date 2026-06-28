@@ -7,9 +7,9 @@ import time
 import typing
 import urllib.parse
 
-import cruise_day_detail
-import cruise_lines
-import cruise_sailing
+from src import cruise_day_detail
+from src import cruise_lines
+from src import cruise_sailing
 
 
 class _CelebrityShipCode(enum.StrEnum):
