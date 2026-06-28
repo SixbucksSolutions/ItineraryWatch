@@ -25,7 +25,6 @@ functions:
       - schedule: cron(1 0 * * ? *)   # EventBridge scheduled event at 00:01 UTC every day
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/db_maintenance.lambda_entry_point_event_bridge
-    memorySize: 256
     timeout: 20 # 20 second runtime to be safe
     package:
       patterns:
@@ -36,7 +35,6 @@ functions:
     events:
       - schedule: cron(0 * * * ? *)   # EventBridge scheduled event on the hour, every hour
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
-    memorySize: 256
     handler: src/scraper_launcher.lambda_entry_point_event_bridge
     timeout: 20 # 20 second runtime to be safe
     package:
@@ -48,7 +46,6 @@ functions:
     events:
       - sns: arn:aws:sns:us-east-2:293119271420:itinerary_watch_scraper_trigger
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
-    memorySize: 512
     handler: src/itinerary_watch_scraper.lambda_entry_point_sns
     timeout: 60
     package:
