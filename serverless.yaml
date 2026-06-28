@@ -3,13 +3,13 @@ service: itinerary-watch
 
 provider:
   name: aws
-  runtime: python3.14             # Supports the latest managed python standard
+  runtime: python3.14
   architecture: arm64
 
 package:
-  individually: true             # 1. Packages this function into its own independent ZIP file
+  individually: true              # Packages all functions into their own independent ZIP file
   patterns:
-    - '!**'                   # Default is ignore everything
+    - '!**'                       # Default is ignore everything
 
 functions:
   db_maintenance:
@@ -18,9 +18,8 @@ functions:
     memorySize: 256
     timeout: 20 # 20 second runtime in case
     package:
-      # 2. Assign the patterns directly to the function to isolate the execution scope
       patterns:
-        - 'src/db_maintenance.py' # 3. Explicitly bundle the target module file
+        - 'src/db_maintenance.py'
         - 'src/aws-rds-global-bundle.pem'
 
 custom:
