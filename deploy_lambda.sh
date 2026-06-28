@@ -1,3 +1,5 @@
 #!/usr/bin/bash
 
-serverless deploy --config lambda_deployments/aws--us-east-2.yaml 
+SERVERLESS="/usr/local/bin/serverless"
+
+${SERVERLESS} deploy --region us-east-2

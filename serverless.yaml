@@ -1,0 +1,28 @@
+# serverless.yml
+service: itinerary-watch
+
+provider:
+  name: aws
+  runtime: python3.14             # Supports the latest managed python standard
+  architecture: arm64
+
+package:
+  individually: true             # 1. Packages this function into its own independent ZIP file
+  patterns:
+    - '!**'                   # Default is ignore everything
+
+
+
+functions:
+  db_maintenance:
+    handler: src/db_maintenance.lambda_entry_point_event_bridge
+    package:
+      # 2. Assign the patterns directly to the function to isolate the execution scope
+      patterns:
+        - '!**'                   # Default is
+        - 'src/db_maintenance.py' # 3. Explicitly bundle the target module file
+
+custom:
+  pythonRequirements:
+    useUv: true                   # Automatically processes your uv.lock
+    installer: uv                 # Fast dependency resolution using uv binary
