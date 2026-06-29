@@ -1,11 +1,11 @@
 # "org" ensures this Service is used with the correct Serverless Framework Access Key.
 org: firsttracks
 
-# serverless.yml
 service: itinerary-watch
 
 provider:
   name: aws
+  region: us-east-2
   runtime: python3.14
   architecture: arm64
   logRetentionInDays: 30
@@ -25,6 +25,7 @@ functions:
       - schedule: cron(1 0 * * ? *)   # EventBridge scheduled event at 00:01 UTC every day
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/db_maintenance.lambda_entry_point_event_bridge
+    memorySize: 256
     timeout: 20 # 20 second runtime to be safe
     package:
       patterns:
@@ -36,6 +37,7 @@ functions:
       - schedule: cron(0 * * * ? *)   # EventBridge scheduled event on the hour, every hour
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/scraper_launcher.lambda_entry_point_event_bridge
+    memorySize: 256
     timeout: 20 # 20 second runtime to be safe
     package:
       patterns:
@@ -47,6 +49,7 @@ functions:
       - sns: arn:aws:sns:us-east-2:293119271420:itinerary_watch_scraper_trigger
     role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/itinerary_watch_scraper.lambda_entry_point_sns
+    memorySize: 512
     timeout: 60
     package:
       patterns:
@@ -60,3 +63,14 @@ custom:
   pythonRequirements:
     useUv: true                   # Automatically processes your uv.lock
     installer: uv                 # Fast dependency resolution using uv binary
+
+    # Don't package python deps that are already in lambda environment or are for types only
+    noDeploy:
+      - boto3
+      - botocore
+      - jmespath
+      - s3transfer
+      - boto3-stubs
+      - botocore-stubs
+      - types-awscrt
+      - types-s3transfer
