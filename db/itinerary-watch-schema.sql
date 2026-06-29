@@ -34,6 +34,9 @@ CREATE TABLE monitored_urls (
 --                      Do NOW() - INTERVAL '24 hours' on OTHER side of >= or <=
 CREATE INDEX idx_monitored_urls_last_scrape_timestamp ON monitored_urls(last_scrape_timestamp);
 
+-- speeds up searches for URL's that changed since last user notification email
+CREATE INDEX idx_monitored_urls_contents_last_changed_timestamp ON monitored_urls(contents_changed_timestamp);
+
 
 
 
