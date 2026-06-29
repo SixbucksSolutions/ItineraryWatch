@@ -1,5 +1,17 @@
 DROP TABLE IF EXISTS user_searches;
+DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS monitored_urls;
+
+CREATE TABLE users (
+    user_id             UUID                        PRIMARY KEY     DEFAULT uuidv7(),
+    email               VARCHAR                     NOT NULL,
+    email_verified      BOOLEAN                     NOT NULL        DEFAULT FALSE,
+    user_last_emailed   TIMESTAMP WITH TIME ZONE
+);
+
+-- speeds up searches for users eligible for another change notification email
+CREATE INDEX idx_users_user_last_emailed ON users(user_last_emailed);
+
 
 CREATE TABLE monitored_urls (
     url_id                      UUID                            PRIMARY KEY DEFAULT uuidv7(),
@@ -8,6 +20,8 @@ CREATE TABLE monitored_urls (
     url                         VARCHAR                         UNIQUE NOT NULL,
 
     last_scrape_timestamp       TIMESTAMP WITH TIME ZONE,
+
+    contents_changed_timestamp  TIMESTAMP WITH TIME ZONE,
 
     -- Enforces that the UUID *must* be version 7
     CONSTRAINT enforce_uuid_v7
@@ -21,11 +35,15 @@ CREATE TABLE monitored_urls (
 CREATE INDEX idx_monitored_urls_last_scrape_timestamp ON monitored_urls(last_scrape_timestamp);
 
 
+
+
 CREATE TABLE user_searches (
-    user_search_id              UUID            PRIMARY KEY     DEFAULT uuidv7(),
-    user_id                     UUID            NOT NULL,
-    watched_url                 UUID            NOT NULL        REFERENCES monitored_urls(url_id),
-    search_name                 VARCHAR         NOT NULL,
+    user_search_id                  UUID                        PRIMARY KEY     DEFAULT uuidv7(),
+    user_id                         UUID                        NOT NULL        REFERENCES users(user_id)
+                                                                                    ON DELETE CASCADE,
+    watched_url                     UUID                        NOT NULL        REFERENCES monitored_urls(url_id)
+                                                                                    ON DELETE CASCADE,
+    search_name                     VARCHAR                     NOT NULL,
 
     -- Prevents duplicate searches for the same URL by the same user
     CONSTRAINT unique_user_watched_url UNIQUE (user_id, watched_url),

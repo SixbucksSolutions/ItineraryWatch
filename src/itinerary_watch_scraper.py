@@ -130,31 +130,55 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
     returned_matches: list[cruise_sailing.CruiseSailing] = cruise_lines.Celebrity.perform_itinerary_search(url)
     # _logger.debug(json.dumps(returned_matches, indent=4, sort_keys=True, default=str))
 
-    # Update last run timestamp for this search URL in app DB
-    _update_db_last_search_time(url_id)
+    # Read Postgres connection details from Parameter Store
+    postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
+    # _logger.debug(f"Postgres connection params: {json.dumps(postgres_connection_params, indent=4)}")
 
-    serialized_matches: list[dict] = [
-        cruise_sailing.serialize_cruise_sailing(sailing) for sailing in returned_matches
-    ]
+    try:
+        # Context manager syntax ("with") gets the connection auto-closed at scope exit
+        with psycopg.connect(
+                    host=postgres_connection_params["db_hostname"],
+                    dbname=postgres_connection_params["db_dbname"],
+                    user=postgres_connection_params["db_user"],
+                    password=postgres_connection_params["db_password"],
+                    sslmode="verify-full",
+                    sslrootcert="src/aws-rds-global-bundle.pem",
+                ) as conn:
 
-    app_s3_bucket_name: str = _read_parameter_store_param("/itinerary_watch/s3/bucket_name")
-    # _logger.debug(f"S3 bucket name for DB: {app_s3_bucket_name}")
+            # Context managers for cursors ensure they *also* close automatically
+            with conn.cursor() as cur:
 
-    # Retrieve latest unique search results for this search from DB, if any
-    search_results_to_compare_against: list[dict] | None = _get_latest_serialized_search_results_for_query(
-        app_s3_bucket_name, url_id
-    )
+                # Update last run timestamp for this search URL in app DB
+                _update_db_last_search_time(cur, url_id)
 
-    # Did search results change?
-    if serialized_matches == search_results_to_compare_against:
-        _logger.info("Our serialized data exactly matches most recent state S3, nothing more to do")
-        return
+                serialized_matches: list[dict] = [
+                    cruise_sailing.serialize_cruise_sailing(sailing) for sailing in returned_matches
+                ]
 
-    _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
+                app_s3_bucket_name: str = _read_parameter_store_param("/itinerary_watch/s3/bucket_name")
+                # _logger.debug(f"S3 bucket name for DB: {app_s3_bucket_name}")
 
-    # Write these search results out
-    _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
+                # Retrieve latest unique search results for this search from DB, if any
+                search_results_to_compare_against: list[dict] | None = _get_latest_serialized_search_results_for_query(
+                    app_s3_bucket_name, url_id
+                )
 
+                # Did search results change?
+                if serialized_matches == search_results_to_compare_against:
+                    _logger.info("Our serialized data exactly matches most recent state S3, nothing more to do")
+                    return
+
+                _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
+
+                # Write these search results out
+                _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
+
+                # Update the DB that contents have changed (used for customer daily notification emails)
+                _update_db_contents_changed(cur, url_id)
+
+    except Exception as e:
+        _logger.critical(f"Database error: {e}")
+        raise
 
     # TODO: Notify customers monitoring this search
     # raise NotImplementedError("Don't not exist yet nossir")
@@ -253,39 +277,31 @@ def _write_new_search_results(url_id: uuid.UUID,
     _logger.info(f"Wrote new search results for URL {str(url_id)} to s3://{s3_bucket_name}/{s3_key}")
 
 
-def _update_db_last_search_time(url_id: uuid.UUID) -> None:
-    # Read Postgres connection details from Parameter Store
-    postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
-    # _logger.debug(f"Postgres connection params: {json.dumps(postgres_connection_params, indent=4)}")
+def _update_db_last_search_time(db_cursor, url_id: uuid.UUID) -> None:
+    db_cursor.execute(
+        """
+        UPDATE  monitored_urls 
+        SET     last_scrape_timestamp = NOW()
+        WHERE   url_id = %s;
+        """,
 
-    try:
-        # Context manager syntax ("with") gets the connection auto-closed at scope exit
-        with psycopg.connect(
-                    host=postgres_connection_params["db_hostname"],
-                    dbname=postgres_connection_params["db_dbname"],
-                    user=postgres_connection_params["db_user"],
-                    password=postgres_connection_params["db_password"],
-                    sslmode="verify-full",
-                    sslrootcert="src/aws-rds-global-bundle.pem",
-                ) as conn:
+        (url_id, )
+    )
 
-            # Context managers for cursors ensure they *also* close automatically
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE  monitored_urls 
-                    SET     last_scrape_timestamp = NOW()
-                    WHERE   url_id = %s;
-                    """,
+    _logger.info("Updated last scrape time for this URL in DB")
 
-                    (url_id, )
-                )
 
-            _logger.info("Updated last scrape time for this URL in DB")
+def _update_db_contents_changed(db_cursor, url_id: uuid.UUID) -> None:
+    db_cursor.execute(
+        """
+        UPDATE  monitored_urls 
+        SET     contents_changed_timestamp = NOW()
+        WHERE   url_id = %s;
+        """,
 
-    except Exception as e:
-        _logger.critical(f"Database error: {e}")
-        raise
+        (url_id, )
+    )
+    _logger.info("Updated time of last content update for this URL in DB")
 
 
 def _get_pg_server_connection_details() -> dict[str, str]:
