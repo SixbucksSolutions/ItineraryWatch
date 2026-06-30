@@ -59,6 +59,19 @@ functions:
         - 'src/cruise_lines/*.py'
         - 'src/aws-rds-global-bundle.pem'
 
+  itinerary_change_detection:
+    events:
+      - schedule: cron(0 * * * ? *)   # EventBridge scheduled event on the hour, every hour
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
+    handler: src/itinerary_change_detection.lambda_entry_point_event_bridge
+    memorySize: 256
+    timeout: 20 # 20 second runtime to be safe
+    package:
+      patterns:
+        - 'src/itinerary_change_detection.py'
+        - 'src/aws-rds-global-bundle.pem'
+
+
 custom:
   pythonRequirements:
     useUv: true                   # Automatically processes your uv.lock
