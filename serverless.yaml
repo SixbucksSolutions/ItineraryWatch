@@ -9,9 +9,6 @@ provider:
   runtime: python3.14
   architecture: arm64
   logRetentionInDays: 30
-  logs:
-    lambda:
-      logFormat: Text
 
 package:
   individually: true              # Packages all functions into their own independent ZIP file
@@ -71,6 +68,17 @@ functions:
         - 'src/itinerary_change_detection.py'
         - 'src/aws-rds-global-bundle.pem'
 
+  customer_notifier:
+    events:
+      - sns: arn:aws:sns:us-east-2:293119271420:itinerary_watch_user_notifier
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
+    handler: src/customer_notifier.lambda_entry_point_sns
+    memorySize: 512
+    timeout: 60
+    package:
+      patterns:
+        - 'src/customer_notifier.py'
+        - 'src/aws-rds-global-bundle.pem'
 
 custom:
   pythonRequirements:

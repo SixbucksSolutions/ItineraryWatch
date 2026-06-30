@@ -14,14 +14,13 @@ import psycopg
 from src import cruise_lines
 from src import cruise_sailing
 
-
-_logger: logging.Logger = logging.getLogger()
+_logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="itinerary_watch_scraper")
 _logger.setLevel(logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 _s3_client = boto3.client("s3", region_name="us-east-2")
 
-
+@_logger.inject_lambda_context(log_event=True)
 def lambda_entry_point_sns(event: dict[str, typing.Any],
                            _context: aws_lambda_powertools.utilities.typing.LambdaContext | None) -> None:
 

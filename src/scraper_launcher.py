@@ -9,13 +9,13 @@ import aws_lambda_powertools.utilities.typing
 
 import psycopg
 
-_logger: logging.Logger = logging.getLogger()
+_logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="scraper_launcher")
 _logger.setLevel(logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 _sns_client = boto3.client("sns", region_name="us-east-2")
 
-
+@_logger.inject_lambda_context(log_event=True)
 @aws_lambda_powertools.utilities.data_classes.event_source(
     data_class=aws_lambda_powertools.utilities.data_classes.EventBridgeEvent)
 def lambda_entry_point_event_bridge(_event: aws_lambda_powertools.utilities.data_classes.EventBridgeEvent,
