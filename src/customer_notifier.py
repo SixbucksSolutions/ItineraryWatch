@@ -123,7 +123,7 @@ def _notify_customer(user_id: uuid.UUID, changed_url_ids: list[uuid.UUID]) -> No
     postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
     # _logger.debug(f"Postgres connection params: {json.dumps(postgres_connection_params, indent=4)}")
 
-    raise NotImplementedError("Not a thing yet")
+    # raise NotImplementedError("Not a thing yet")
 
     try:
         # Context manager syntax ("with") gets the connection auto-closed at scope exit
@@ -138,7 +138,26 @@ def _notify_customer(user_id: uuid.UUID, changed_url_ids: list[uuid.UUID]) -> No
 
             # Context managers for cursors ensure they *also* close automatically
             with conn.cursor() as cur:
-                pass
+                cur.execute(
+                    """
+                    SELECT      email 
+                    FROM        users
+                    WHERE       user_id = %s
+                            AND email_verified;
+                    """,
+
+                    (user_id, )
+                )
+
+                # if no results returned, their email isn't verified, bail out
+                email_row: tuple[str] | None = cur.fetchone()
+                if email_row is None:
+                    _logger.info(f"User {str(user_id)} does not have a validated email address, skipping")
+                    return
+
+                email_address: str = email_row[0]
+                _logger.info(f"User validated email address from DB: {email_address}")
+
 
     except Exception as e:
         _logger.critical(f"Database error: {e}")
