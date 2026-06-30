@@ -1,6 +1,6 @@
-import datetime
 import json
 import logging
+import typing
 import uuid
 
 import aws_lambda_powertools.utilities.data_classes
@@ -10,7 +10,7 @@ import psycopg
 
 
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="customer_notifier")
-_logger.setLevel(logging.INFO)
+_logger.setLevel(logging.DEBUG)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 _s3_client = boto3.client("s3", region_name="us-east-2")
@@ -158,6 +158,33 @@ def _notify_customer(user_id: uuid.UUID, changed_url_ids: list[uuid.UUID]) -> No
                 email_address: str = email_row[0]
                 _logger.info(f"User validated email address from DB: {email_address}")
 
+                # pull details on the user searches
+                cur.execute(
+                    """
+                    SELECT      user_search_id, search_name
+                    FROM        user_searches
+                    WHERE       user_id = %s
+                                AND watched_url = ANY(%s)
+                    ORDER BY    search_name;
+                    """,
+
+                    (user_id, changed_url_ids)
+                )
+
+                retrieved_rows: list[tuple[str, str]] = cur.fetchall()
+
+                if len(retrieved_rows) != len(changed_url_ids):
+                    _logger.warning(f"Search for watched URL's didn't get all data")
+                    raise RuntimeError(f"Searched for URL's {changed_url_ids} but didn't get all rows")
+
+                _logger.debug("Got proper number of rows back")
+
+                # _logger.debug(json.dumps(retrieved_rows, indent=4, default=str))
+
+                _send_customer_notification(user_id, email_address, retrieved_rows)
+
+                _update_db_last_email_time(cur, user_id)
+
 
     except Exception as e:
         _logger.critical(f"Database error: {e}")
@@ -207,3 +234,21 @@ def _get_pg_server_connection_details() -> dict[str, str]:
         return_dict[curr_key.split("/")[-1]] = returned_params[curr_key]
 
     return return_dict
+
+
+def _send_customer_notification(user_id: uuid.UUID, email_address: str, retrieved_rows: list[tuple[str, str]]) -> None:
+    email_contents: dict[str, typing.Any] = {
+        "customer_id"                   : user_id,
+        "email_address"                 : email_address,
+        "updated_itinerary_searches"    : [],
+    }
+
+    for curr_row in retrieved_rows:
+        email_contents["updated_itinerary_searches"].append(
+            {
+                "customer_search_id"    : curr_row[0],
+                "customer_search_name"  : curr_row[1],
+            }
+        )
+
+    _logger.debug(f"TODO call SES with {json.dumps(email_contents, default=str)}")
