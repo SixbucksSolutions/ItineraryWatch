@@ -2,9 +2,9 @@ import json
 import logging
 import typing
 import uuid
-
 import aws_lambda_powertools.utilities.data_classes
 import aws_lambda_powertools.utilities.typing
+import botocore.exceptions
 import boto3
 import psycopg
 
@@ -12,8 +12,9 @@ import psycopg
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="customer_notifier")
 _logger.setLevel(logging.DEBUG)
 
-_ssm_client = boto3.client("ssm", region_name="us-east-2")
-_s3_client = boto3.client("s3", region_name="us-east-2")
+_ssm_client = boto3.client("ssm",   region_name="us-east-2")
+_ses_client = boto3.client("ses",   region_name="us-east-2")
+
 
 @_logger.inject_lambda_context(log_event=True)
 @aws_lambda_powertools.utilities.data_classes.event_source(
@@ -181,10 +182,12 @@ def _notify_customer(user_id: uuid.UUID, changed_url_ids: list[uuid.UUID]) -> No
 
                 # _logger.debug(json.dumps(retrieved_rows, indent=4, default=str))
 
-                _send_customer_notification(user_id, email_address, retrieved_rows)
+                if not _send_customer_notification(user_id, email_address, retrieved_rows):
+                    _logger.info("email sent time not updated as email was not sent successfully")
+                    return
 
+                # Email was sent; update DB so we don't spam user
                 _update_db_last_email_time(cur, user_id)
-
 
     except Exception as e:
         _logger.critical(f"Database error: {e}")
@@ -236,7 +239,9 @@ def _get_pg_server_connection_details() -> dict[str, str]:
     return return_dict
 
 
-def _send_customer_notification(user_id: uuid.UUID, email_address: str, retrieved_rows: list[tuple[str, str]]) -> None:
+def _send_customer_notification(
+        user_id: uuid.UUID, email_address: str, retrieved_rows: list[tuple[str, str]]) -> bool:
+
     email_contents: dict[str, typing.Any] = {
         "customer_id"                   : user_id,
         "email_address"                 : email_address,
@@ -251,4 +256,30 @@ def _send_customer_notification(user_id: uuid.UUID, email_address: str, retrieve
             }
         )
 
-    _logger.debug(f"TODO call SES with {json.dumps(email_contents, default=str)}")
+    # _logger.debug(f"TODO call SES with {json.dumps(email_contents, default=str)}")
+
+    try:
+        response = _ses_client.send_email(
+            Source="notify@itinerarywatch.sixbuckssolutions.com",
+            Destination={
+                "ToAddresses": [email_contents["email_address"]],
+            },
+            Message={
+                "Subject": {
+                    "Data"          : "ItineraryWatch User Search Update Notification",
+                    "Charset"       : "UTF-8",
+                },
+                "Body": {
+                    "Text": {
+                        "Data"      : "This is a test email sent using boto3.",
+                        "Charset"   : "UTF-8",
+                    }
+                }
+            }
+        )
+        _logger.info(f"Email sent! Message ID: {response["MessageId"]}")
+    except botocore.exceptions.ClientError as e:
+        _logger.warning(f"Error sending email: {e.response["Error"]["Message"]}")
+        return False
+
+    return True

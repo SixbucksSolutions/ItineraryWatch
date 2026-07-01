@@ -80,6 +80,18 @@ functions:
         - 'src/customer_notifier.py'
         - 'src/aws-rds-global-bundle.pem'
 
+  oauth_callback_google:
+    handler: src/web_api/oauth_callback_google.lambda_handler_apigw
+    memorySize: 1769
+    events:
+      - httpApi:
+          method: POST
+          path: /oauth/callback/google
+    package:
+      patterns:
+        - 'src/web_api/oauth_callback_google.py'
+
+
 custom:
   pythonRequirements:
     useUv: true                   # Automatically processes your uv.lock
