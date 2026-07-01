@@ -9,6 +9,18 @@ provider:
   runtime: python3.14
   architecture: arm64
   logRetentionInDays: 30
+  httpApi:
+    cors:
+      allowedOrigins:
+        - https://www.itinerarywatch.com
+      allowedMethods:
+        - POST
+        - GET
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+    disableDefaultEndpoint: true
+
 
 package:
   individually: true              # Packages all functions into their own independent ZIP file
@@ -91,6 +103,8 @@ functions:
       patterns:
         - 'src/web_api/oauth_callback_google.py'
 
+plugins:
+  - serverless-domain-manager
 
 custom:
   pythonRequirements:
@@ -107,3 +121,13 @@ custom:
       - botocore-stubs
       - types-awscrt
       - types-s3transfer
+  customDomain:
+    domainName: api.itinerarywatch.com
+    stage: ${sls:stage}
+    basePath: ''                # Serves your API from the root path (/)
+    certificateName: 'api.itinerarywatch.com' # The plugin will request/look up this cert name
+    createRoute53Record: true   # Automatically adds A/AAAA records to Route 53
+    endpointType: REGIONAL      # MUST be REGIONAL for API Gateway v2 (HTTP APIs)
+    securityPolicy: tls_1_2     # Required protocol security standard
+    apiType: http               # MUST be 'http' to target API Gateway v2
+    autoDomain: true            # Automates domain creation on 'sls deploy'
