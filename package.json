@@ -1,5 +1,6 @@
 {
   "devDependencies": {
-    "serverless-domain-manager": "^10.2.0"
+    "serverless-domain-manager": "^10.2.0",
+    "serverless-plugin-warmup": "^8.4.1"
   }
 }
