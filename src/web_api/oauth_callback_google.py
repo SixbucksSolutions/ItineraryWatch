@@ -1,4 +1,5 @@
 import base64
+import functools
 import json
 import logging
 import time
@@ -17,29 +18,35 @@ import psycopg
 
 # Root powertools package gets imported by submodules, doesn't need explicit import
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="oauth_callback_google")
-_logger.setLevel(level=logging.DEBUG)
+_logger.setLevel(level=logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 
 
-@_logger.inject_lambda_context(log_event=True)
+def avoid_warmup_errors(handler):
+    @functools.wraps(handler)
+    def wrapper(event, context, *args, **kwargs):
+        # Intercept the warmer payload before Pydantic parses it
+        if isinstance(event, dict) and event.get("source") == "serverless-plugin-warmup":
+            _logger.debug("WarmUp: Intercepted ping before Pydantic parser, exiting early")
+            return{
+                "statusCode"    : 200,
+                "body"          : "",
+            }
+
+        return handler(event, context, *args, **kwargs)
+    return wrapper
+
+
+@_logger.inject_lambda_context(log_event=True)  # Log all function invocations, even warmup
+@avoid_warmup_errors                            # Decorator stack is executed top down, this executes BEFORE the parser middleware
 @aws_lambda_powertools.utilities.parser.event_parser(
         model=aws_lambda_powertools.utilities.parser.models.APIGatewayProxyEventV2Model)
 def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.APIGatewayProxyEventV2Model,
                          _context: aws_lambda_powertools.utilities.typing.LambdaContext) -> dict[str, typing.Any]:
 
-    try:
-        parsed_envelope: aws_lambda_powertools.utilities.parser.models.APIGatewayProxyEventV2Model = \
-            aws_lambda_powertools.utilities.parser.models.APIGatewayProxyEventV2Model.model_validate(event)
-    except ValueError as e:
-        _logger.warning(f"Failed pydantic model validation: {e}")
-        return {
-            "statusCode"    : 400,
-            "body"          : f"Failed pydantic model validation: {e}"
-        }
-
-    # 1. Get the raw body string
-    raw_body: str = typing.cast(str, parsed_envelope.body)
+    # Get the raw body string
+    raw_body: str = typing.cast(str, event.body)
     if not raw_body:
         _logger.warning("Received empty body")
         return {
@@ -171,7 +178,7 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
         },
 
         # Body is required by API Gateway, even if empty
-        "body"          : None,
+        "body"          : "",
     }
 
 

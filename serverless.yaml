@@ -100,6 +100,9 @@ functions:
       - httpApi:
           method: POST
           path: /oauth/callback/google
+    warmup:
+      default:
+        enabled: true   # Avoid cold start as it's user facing' ping every five mins to keep resident
     package:
       patterns:
         - 'src/web_api/oauth_callback_google.py'
@@ -107,6 +110,7 @@ functions:
 
 plugins:
   - serverless-domain-manager
+  - serverless-plugin-warmup
 
 custom:
   pythonRequirements:
@@ -133,3 +137,7 @@ custom:
     securityPolicy: tls_1_2     # Required protocol security standard
     apiType: http               # MUST be 'http' to target API Gateway v2
     autoDomain: true            # Automates domain creation on 'sls deploy'
+  warmup:
+    default:
+      enabled: false    # warmup (ping every five mins) is optional, not enabled for ALL functions
+      prewarm: true     # Any functions that enable this warmer get loaded immediateluy on deploy, no five min cold window
