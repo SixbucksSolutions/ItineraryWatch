@@ -143,17 +143,16 @@ def _notify_customer(user_id: uuid.UUID, changed_url_ids: list[uuid.UUID]) -> No
                     """
                     SELECT      email 
                     FROM        users
-                    WHERE       user_id = %s
-                            AND email_verified;
+                    WHERE       user_id = %s;
                     """,
 
                     (user_id, )
                 )
 
-                # if no results returned, their email isn't verified, bail out
+                # if no results returned bail out
                 email_row: tuple[str] | None = cur.fetchone()
                 if email_row is None:
-                    _logger.info(f"User {str(user_id)} does not have a validated email address, skipping")
+                    _logger.warning(f"User {str(user_id)} does not exist, skipping")
                     return
 
                 email_address: str = email_row[0]
