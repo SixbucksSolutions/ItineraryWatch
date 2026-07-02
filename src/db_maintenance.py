@@ -35,10 +35,8 @@ def lambda_entry_point_event_bridge(_event: aws_lambda_powertools.utilities.data
                     password=postgres_connection_params["db_password"],
                     sslmode="verify-full",
                     sslrootcert="src/aws-rds-global-bundle.pem",
+                    autocimmit=True,
                 ) as conn:
-
-            # need to turn autocommit on so command is not run in a transaction block
-            conn.autocommit = True
 
             # Context managers for cursors ensure they *also* close automatically
             start_time: float = time.perf_counter()

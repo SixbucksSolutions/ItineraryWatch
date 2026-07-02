@@ -3,8 +3,8 @@ DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS monitored_urls;
 
 CREATE TABLE users (
-    user_id             UUID                        PRIMARY KEY     DEFAULT uuidv7(),
-    email               VARCHAR                     NOT NULL,
+    user_id             UUID                        PRIMARY KEY         DEFAULT uuidv7(),
+    email               VARCHAR                     UNIQUE NOT NULL,
     user_last_emailed   TIMESTAMP WITH TIME ZONE
 );
 

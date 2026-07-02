@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import time
 import typing
 import urllib.parse
 import uuid
@@ -136,9 +137,41 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
 
     user_id: uuid.UUID = _get_or_assign_user_id(validated_jwt_claims)
 
+    # Redirect to watches list for this user with their user ID as a query parameter
+    base_url = "https://www.itinerarywatch.com/watches"
+    parsed_url = urllib.parse.urlparse(base_url)
+
+    # Safely encode the query parameters
+    params = {
+        "user_id": str(user_id),
+    }
+
+    encoded_query = urllib.parse.urlencode(params)
+
+    # Components structure: (scheme, netloc, path, params, query, fragment)
+    url_components = (
+        parsed_url.scheme,  # 'https'
+        parsed_url.netloc,  # 'www.firsttracks.net'
+        parsed_url.path,  # '/watches'
+        parsed_url.params,  # ''
+        encoded_query,  # 'user_id=12345'
+        parsed_url.fragment  # ''
+    )
+
+    # Generate the finalized validated URL string
+    redirect_url: str = urllib.parse.urlunparse(url_components)
+
     return {
-        "statusCode"    : 200,
-        "body"          : "Success"
+        "statusCode"    : 302,  # 302 for temporary redirect, 301 for permanent
+        "headers"       : {
+            "Location"          : redirect_url,
+
+            # Prevent browser caching of this redirect
+            "Cache-Control"     : "no-cache, no-store, must-revalidate"
+        },
+
+        # Body is required by API Gateway, even if empty
+        "body"          : None,
     }
 
 
@@ -151,5 +184,65 @@ def _read_parameter_store_params(parameter_names: list[str]) -> dict[str, str]:
     return return_dict
 
 
+def _get_pg_server_connection_details() -> dict[str, str]:
+    db_params_keys: list[str] = [
+        "/itinerary_watch/postgres/db_hostname",
+        "/itinerary_watch/postgres/db_dbname",
+        "/itinerary_watch/postgres/db_user",
+        "/itinerary_watch/postgres/db_password",
+    ]
+
+    returned_params: dict[str, str] = _read_parameter_store_params(db_params_keys)
+
+    return_dict: dict[str, str] = {}
+    for curr_key in db_params_keys:
+        # shorten to final token
+        return_dict[curr_key.split("/")[-1]] = returned_params[curr_key]
+
+    return return_dict
+
+
 def _get_or_assign_user_id(validated_jwt_claims: dict[str, typing.Any]) -> uuid.UUID:
-    pass
+    postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
+
+    # Use an upsert query that always returns the user_id
+    upsert_query: str = """
+    INSERT INTO             users (email) 
+    VALUES                  (%s)
+    ON CONFLICT (email) 
+        DO UPDATE           SET email = EXCLUDED.email
+    RETURNING               user_id;
+    """
+
+    logged_in_user_email: str = validated_jwt_claims["email"]
+
+    try:
+        # Context manager syntax ("with") gets the connection auto-closed at scope exit, commits if no errors
+        #       during connection
+        with psycopg.connect(
+                host=postgres_connection_params["db_hostname"],
+                dbname=postgres_connection_params["db_dbname"],
+                user=postgres_connection_params["db_user"],
+                password=postgres_connection_params["db_password"],
+                sslmode="verify-full",
+                sslrootcert="src/aws-rds-global-bundle.pem",
+        ) as conn:
+            # Context managers for cursors ensure they *also* close automatically
+            with conn.cursor() as cur:
+                start_time = time.perf_counter()
+                cur.execute(upsert_query, (logged_in_user_email,))
+                end_time = time.perf_counter()
+
+                result = cur.fetchone()
+
+    except Exception as e:
+        _logger.critical(f"Database error: {e}")
+        raise
+
+    # Returns the UUID string
+    user_id: uuid.UUID = result[0]
+
+    _logger.info(f"User ID {str(user_id)} retrieved for {logged_in_user_email} in "
+                 f"{end_time - start_time:.03f} seconds")
+
+    return user_id

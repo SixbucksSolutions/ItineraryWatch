@@ -137,56 +137,40 @@ def _notify_customer(user_id: uuid.UUID, changed_url_ids: list[uuid.UUID]) -> No
                     sslrootcert="src/aws-rds-global-bundle.pem",
                 ) as conn:
 
-            # Context managers for cursors ensure they *also* close automatically
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT      email 
-                    FROM        users
-                    WHERE       user_id = %s;
-                    """,
+            # Launch a transaction as we're logically chaining queries; need all to succeed or none
+            with conn.transaction():
 
-                    (user_id, )
-                )
+                # Context managers for cursors ensure they *also* close automatically
+                with conn.cursor() as cur:
+                    # pull details on the user searches
+                    cur.execute(
+                        """
+                        SELECT      user_search_id, search_name
+                        FROM        user_searches
+                        WHERE       user_id = %s
+                                    AND watched_url = ANY(%s)
+                        ORDER BY    search_name;
+                        """,
 
-                # if no results returned bail out
-                email_row: tuple[str] | None = cur.fetchone()
-                if email_row is None:
-                    _logger.warning(f"User {str(user_id)} does not exist, skipping")
-                    return
+                        (user_id, changed_url_ids)
+                    )
 
-                email_address: str = email_row[0]
-                _logger.info(f"User validated email address from DB: {email_address}")
+                    retrieved_rows: list[tuple[str, str]] = cur.fetchall()
 
-                # pull details on the user searches
-                cur.execute(
-                    """
-                    SELECT      user_search_id, search_name
-                    FROM        user_searches
-                    WHERE       user_id = %s
-                                AND watched_url = ANY(%s)
-                    ORDER BY    search_name;
-                    """,
+                    if len(retrieved_rows) != len(changed_url_ids):
+                        _logger.warning(f"Search for watched URL's didn't get all data")
+                        raise RuntimeError(f"Searched for URL's {changed_url_ids} but didn't get all rows")
 
-                    (user_id, changed_url_ids)
-                )
+                    _logger.debug("Got proper number of rows back")
 
-                retrieved_rows: list[tuple[str, str]] = cur.fetchall()
+                    # _logger.debug(json.dumps(retrieved_rows, indent=4, default=str))
 
-                if len(retrieved_rows) != len(changed_url_ids):
-                    _logger.warning(f"Search for watched URL's didn't get all data")
-                    raise RuntimeError(f"Searched for URL's {changed_url_ids} but didn't get all rows")
+                    if not _send_customer_notification(user_id, email_address, retrieved_rows):
+                        _logger.info("email sent time not updated as email was not sent successfully")
+                        return
 
-                _logger.debug("Got proper number of rows back")
-
-                # _logger.debug(json.dumps(retrieved_rows, indent=4, default=str))
-
-                if not _send_customer_notification(user_id, email_address, retrieved_rows):
-                    _logger.info("email sent time not updated as email was not sent successfully")
-                    return
-
-                # Email was sent; update DB so we don't spam user
-                _update_db_last_email_time(cur, user_id)
+                    # Email was sent; update DB so we don't spam user
+                    _update_db_last_email_time(cur, user_id)
 
     except Exception as e:
         _logger.critical(f"Database error: {e}")

@@ -103,6 +103,7 @@ functions:
     package:
       patterns:
         - 'src/web_api/oauth_callback_google.py'
+        - 'src/aws-rds-global-bundle.pem'
 
 plugins:
   - serverless-domain-manager

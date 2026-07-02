@@ -144,43 +144,43 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
                     sslrootcert="src/aws-rds-global-bundle.pem",
                 ) as conn:
 
-            # Context managers for cursors ensure they *also* close automatically
-            with conn.cursor() as cur:
+            # Multiple db changes need to be in a transaction, auto committed at the end
+            with conn.transaction():
 
-                # Update last run timestamp for this search URL in app DB
-                _update_db_last_search_time(cur, url_id)
+                # Context managers for cursors ensure they *also* close automatically
+                with conn.cursor() as cur:
 
-                serialized_matches: list[dict] = [
-                    cruise_sailing.serialize_cruise_sailing(sailing) for sailing in returned_matches
-                ]
+                    # Update last run timestamp for this search URL in app DB
+                    _update_db_last_search_time(cur, url_id)
 
-                app_s3_bucket_name: str = _read_parameter_store_param("/itinerary_watch/s3/bucket_name")
-                # _logger.debug(f"S3 bucket name for DB: {app_s3_bucket_name}")
+                    serialized_matches: list[dict] = [
+                        cruise_sailing.serialize_cruise_sailing(sailing) for sailing in returned_matches
+                    ]
 
-                # Retrieve latest unique search results for this search from DB, if any
-                search_results_to_compare_against: list[dict] | None = _get_latest_serialized_search_results_for_query(
-                    app_s3_bucket_name, url_id
-                )
+                    app_s3_bucket_name: str = _read_parameter_store_param("/itinerary_watch/s3/bucket_name")
+                    # _logger.debug(f"S3 bucket name for DB: {app_s3_bucket_name}")
 
-                # Did search results change?
-                if serialized_matches == search_results_to_compare_against:
-                    _logger.info("Our serialized data exactly matches most recent state S3, nothing more to do")
-                    return
+                    # Retrieve latest unique search results for this search from DB, if any
+                    search_results_to_compare_against: list[dict] | None = _get_latest_serialized_search_results_for_query(
+                        app_s3_bucket_name, url_id
+                    )
 
-                _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
+                    # Did search results change?
+                    if serialized_matches == search_results_to_compare_against:
+                        _logger.info("Our serialized data exactly matches most recent state S3, nothing more to do")
+                        return
 
-                # Write these search results out
-                _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
+                    _logger.info("Search results have changed since latest previous data, or this is first run for this URL")
 
-                # Update the DB that contents have changed (used for customer daily notification emails)
-                _update_db_contents_changed(cur, url_id)
+                    # Write these search results out
+                    _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
+
+                    # Update the DB that contents have changed (used for customer daily notification emails)
+                    _update_db_contents_changed(cur, url_id)
 
     except Exception as e:
         _logger.critical(f"Database error: {e}")
         raise
-
-    # TODO: Notify customers monitoring this search
-    # raise NotImplementedError("Don't not exist yet nossir")
 
 
 def _get_search_url_details(url: str) -> dict[str, typing.Any]:
