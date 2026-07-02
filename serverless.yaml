@@ -93,6 +93,7 @@ functions:
         - 'src/aws-rds-global-bundle.pem'
 
   oauth_callback_google:
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
     handler: src/web_api/oauth_callback_google.lambda_handler_apigw
     memorySize: 1769
     events:

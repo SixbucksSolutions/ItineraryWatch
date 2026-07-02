@@ -5,12 +5,14 @@ DROP TABLE IF EXISTS monitored_urls;
 CREATE TABLE users (
     user_id             UUID                        PRIMARY KEY     DEFAULT uuidv7(),
     email               VARCHAR                     NOT NULL,
-    email_verified      BOOLEAN                     NOT NULL        DEFAULT FALSE,
     user_last_emailed   TIMESTAMP WITH TIME ZONE
 );
 
+-- On login, we look users up by their Google email
+CREATE INDEX idx_users_email                ON users(email);
+
 -- speeds up searches for users eligible for another change notification email
-CREATE INDEX idx_users_user_last_emailed ON users(user_last_emailed);
+CREATE INDEX idx_users_user_last_emailed    ON users(user_last_emailed);
 
 
 CREATE TABLE monitored_urls (
