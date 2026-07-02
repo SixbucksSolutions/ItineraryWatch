@@ -57,7 +57,7 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
     _logger.debug(f"Raw body: {raw_body}")
 
     # Intercept and decode base64 if needed
-    if parsed_envelope.isBase64Encoded:
+    if event.isBase64Encoded:
         raw_body: str = base64.b64decode(raw_body).decode("utf-8")
 
     # Now parse inner contents -- will return an empty string if body is not valid form contents
