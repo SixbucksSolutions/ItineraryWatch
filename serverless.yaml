@@ -19,6 +19,10 @@ provider:
         - OPTIONS     # Needed for CORS preflight to pass
       allowedHeaders:
         - Content-Type
+        - Accept
+        - Accepts
+      exposedHeaders:
+        - WWW-Authenticate
       allowCredentials: true    # signals to frontend it's okay (necessary, even) to attach cookies to this call
     disableDefaultEndpoint: true
 
@@ -107,6 +111,23 @@ functions:
       patterns:
         - 'src/web_api/oauth_callback_google.py'
         - 'src/aws-rds-global-bundle.pem'
+
+  api_user:
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
+    handler: src/web_api/api_user.lambda_handler_apigw
+    memorySize: 1769
+    events:
+      - httpApi:
+          method: GET
+          path: /api/v001/user
+    warmup:
+      default:
+        enabled: true   # Avoid cold start as it's user facing' ping every five mins to keep resident
+    package:
+      patterns:
+        - 'src/web_api/api_user.py'
+        - 'src/aws-rds-global-bundle.pem'
+
 
 plugins:
   - serverless-domain-manager

@@ -150,7 +150,7 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
     # - HttpOnly blocks malicious frontend JS scripts from stealing the token
     # - Secure guarantees it only travels over encrypted HTTPS links
     cookie_string: str = (
-        f"user_id={str(user_id)}; "
+        f"__Host-user_id={str(user_id)}; "
         "Path=/; "
         "SameSite=Strict; "
         "HttpOnly; "
