@@ -21,7 +21,7 @@ provider:
         - Content-Type
         - Accept
         - Accepts
-      exposedHeaders:
+      exposedResponseHeaders:
         - WWW-Authenticate
       allowCredentials: true    # signals to frontend it's okay (necessary, even) to attach cookies to this call
     disableDefaultEndpoint: true
@@ -125,6 +125,7 @@ functions:
         enabled: true   # Avoid cold start as it's user facing' ping every five mins to keep resident
     package:
       patterns:
+        - 'src/web_api/auth.py'
         - 'src/web_api/api_user.py'
         - 'src/aws-rds-global-bundle.pem'
 

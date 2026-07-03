@@ -45,9 +45,6 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
             "statusCode": 401,
             "headers": {
                 "Content-Type"                      : "application/json",
-                "Access-Control-Allow-Origin"       : "https://www.itinerarywatch.com",
-                "Access-Control-Allow-Credentials"  : True,
-                "Access-Control-Allow-Headers"      : "Content-Type,Accept",
                 "WWW-Authenticate"                  : "Cookie realm=\"://api.itinerarywatch.com\""
             },
             "body": json.dumps(
