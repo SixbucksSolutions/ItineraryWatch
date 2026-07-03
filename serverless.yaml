@@ -152,13 +152,14 @@ custom:
   customDomain:
     domainName: api.itinerarywatch.com
     stage: ${sls:stage}
-    basePath: ''                # Serves your API from the root path (/)
-    certificateName: 'api.itinerarywatch.com' # The plugin will request/look up this cert name
-    createRoute53Record: true   # Automatically adds A/AAAA records to Route 53
-    endpointType: REGIONAL      # MUST be REGIONAL for API Gateway v2 (HTTP APIs)
-    securityPolicy: tls_1_2     # Required protocol security standard
-    apiType: http               # MUST be 'http' to target API Gateway v2
-    autoDomain: true            # Automates domain creation on 'sls deploy'
+    basePath: ''                                # Serves your API from the root path (/)
+    certificateName: 'api.itinerarywatch.com'   # The plugin will request/look up this cert name
+    createRoute53Record: true                   # Automatically adds A    records to Route 53
+    createRoute53IPv6Record: true               # Automatically adds AAAA records to Route 53
+    endpointType: REGIONAL                      # MUST be REGIONAL for API Gateway v2 (HTTP APIs)
+    securityPolicy: tls_1_2                     # Required protocol security standard
+    apiType: http                               # MUST be 'http' to target API Gateway v2
+    autoDomain: true                            # Automates domain creation on 'sls deploy'
   warmup:
     default:
       enabled: false    # warmup (ping every five mins) is optional, not enabled for ALL functions
