@@ -144,29 +144,21 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
 
     user_id: uuid.UUID = _get_or_assign_user_id(validated_jwt_claims)
 
-    # Redirect to watches list for this user with their user ID as a query parameter
-    base_url = "https://www.itinerarywatch.com/watches"
-    parsed_url = urllib.parse.urlparse(base_url)
-
-    # Safely encode the query parameters
-    params = {
-        "user_id": str(user_id),
-    }
-
-    encoded_query = urllib.parse.urlencode(params)
-
-    # Components structure: (scheme, netloc, path, params, query, fragment)
-    url_components = (
-        parsed_url.scheme,  # 'https'
-        parsed_url.netloc,  # 'www.firsttracks.net'
-        parsed_url.path,  # '/watches'
-        parsed_url.params,  # ''
-        encoded_query,  # 'user_id=12345'
-        parsed_url.fragment  # ''
+    # Set a cookie for JUST api, not needed for www, will be attached and invisible to JavaScript
+    # - Omit the "Domain=" property so the browser defaults strictly to current host (api.)
+    # - SameSite=Strict ensures it is never passed on cross-origin redirects
+    # - HttpOnly blocks malicious frontend JS scripts from stealing the token
+    # - Secure guarantees it only travels over encrypted HTTPS links
+    cookie_string: str = (
+        f"user_id={str(user_id)}; "
+        "Path=/; "
+        "SameSite=Strict; "
+        "HttpOnly; "
+        "Secure; "
+        "Max-Age=604800" # Expires in 7 days (60 * 60 * 24 * 7)
     )
 
-    # Generate the finalized validated URL string
-    redirect_url: str = urllib.parse.urlunparse(url_components)
+    redirect_url: str = "https://www.itinerarywatch.com/watches"
 
     return {
         "statusCode"    : 302,  # 302 for temporary redirect, 301 for permanent
@@ -176,6 +168,9 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
             # Prevent browser caching of this redirect
             "Cache-Control"     : "no-cache, no-store, must-revalidate"
         },
+
+        # Set the auth cookie with user ID for this domain
+        "cookies": [cookie_string],
 
         # Body is required by API Gateway, even if empty
         "body"          : "",

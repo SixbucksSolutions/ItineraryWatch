@@ -16,11 +16,11 @@ provider:
       allowedMethods:
         - POST
         - GET
+        - OPTIONS     # Needed for CORS preflight to pass
       allowedHeaders:
         - Content-Type
-        - Authorization
+      allowCredentials: true    # signals to frontend it's okay (necessary, even) to attach cookies to this call
     disableDefaultEndpoint: true
-
 
 package:
   individually: true              # Packages all functions into their own independent ZIP file
