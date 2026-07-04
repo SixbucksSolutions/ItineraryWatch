@@ -106,7 +106,7 @@ functions:
           path: /oauth/callback/google
     warmup:
       default:
-        enabled: true   # Avoid cold start as it's user facing' ping every five mins to keep resident
+        enabled: true   # Avoid cold start as it's user facing; ping every five mins to keep resident
     package:
       patterns:
         - 'src/web_api/oauth_callback_google.py'
@@ -122,13 +122,29 @@ functions:
           path: /api/v001/user
     warmup:
       default:
-        enabled: true   # Avoid cold start as it's user facing' ping every five mins to keep resident
+        enabled: true   # Avoid cold start as it's user facing; ping every five mins to keep resident
     package:
       patterns:
         - 'src/web_api/auth.py'
         - 'src/web_api/api_user.py'
         - 'src/aws-rds-global-bundle.pem'
 
+  api_watches:
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
+    handler: src/web_api/api_watches.lambda_handler_apigw
+    memorySize: 1769
+    events:
+      - httpApi:
+          method: GET
+          path: /api/v001/watches
+    warmup:
+      default:
+        enabled: true   # Avoid cold start as it's user facing; ping every five mins to keep resident
+    package:
+      patterns:
+        - 'src/web_api/auth.py'
+        - 'src/web_api/api_watches.py'
+        - 'src/aws-rds-global-bundle.pem'
 
 plugins:
   - serverless-domain-manager

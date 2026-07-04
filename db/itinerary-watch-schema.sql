@@ -5,7 +5,10 @@ DROP TABLE IF EXISTS monitored_urls;
 CREATE TABLE users (
     user_id             UUID                        PRIMARY KEY         DEFAULT uuidv7(),
     email               VARCHAR                     UNIQUE NOT NULL,
-    user_last_emailed   TIMESTAMP WITH TIME ZONE
+    user_last_emailed   TIMESTAMP WITH TIME ZONE,
+
+    CONSTRAINT enforce_uuid_v7
+        CHECK (uuid_extract_version(user_id) = 7)
 );
 
 -- speeds up searches for users eligible for another change notification email
@@ -38,7 +41,6 @@ CREATE INDEX idx_monitored_urls_contents_last_changed_timestamp ON monitored_url
 
 
 
-
 CREATE TABLE user_searches (
     user_search_id                  UUID                        PRIMARY KEY     DEFAULT uuidv7(),
     user_id                         UUID                        NOT NULL        REFERENCES users(user_id)
@@ -56,8 +58,6 @@ CREATE TABLE user_searches (
     -- Enforces that UUID *must* be version 7
     CONSTRAINT enforce_uuid_v7 CHECK (
         uuid_extract_version(user_search_id) = 7
-        AND
-        uuid_extract_version(user_id) = 7
     )
 );
 
