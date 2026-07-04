@@ -8,9 +8,6 @@ CREATE TABLE users (
     user_last_emailed   TIMESTAMP WITH TIME ZONE
 );
 
--- On login, we look users up by their Google email
-CREATE INDEX idx_users_email                ON users(email);
-
 -- speeds up searches for users eligible for another change notification email
 CREATE INDEX idx_users_user_last_emailed    ON users(user_last_emailed);
 
