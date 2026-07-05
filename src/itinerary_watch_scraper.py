@@ -176,7 +176,7 @@ def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
                     _write_new_search_results(url_id, serialized_matches, app_s3_bucket_name)
 
                     # Update the DB that contents have changed (used for customer daily notification emails)
-                    _update_db_contents_changed(cur, url_id)
+                    _update_db_contents_changed(cur, url_id, len(serialized_matches))
 
     except Exception as e:
         _logger.critical(f"Database error: {e}")
@@ -290,15 +290,16 @@ def _update_db_last_search_time(db_cursor, url_id: uuid.UUID) -> None:
     _logger.info("Updated last scrape time for this URL in DB")
 
 
-def _update_db_contents_changed(db_cursor, url_id: uuid.UUID) -> None:
+def _update_db_contents_changed(db_cursor, url_id: uuid.UUID, num_sailings_seen: int) -> None:
     db_cursor.execute(
         """
         UPDATE  monitored_urls 
-        SET     contents_changed_timestamp = NOW()
+        SET     contents_changed_timestamp = NOW(),
+                matching_sailings_found = %s
         WHERE   url_id = %s;
         """,
 
-        (url_id, )
+        (num_sailings_seen, url_id)
     )
     _logger.info("Updated time of last content update for this URL in DB")
 

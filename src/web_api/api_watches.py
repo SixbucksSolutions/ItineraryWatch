@@ -1,3 +1,4 @@
+import datetime
 import functools
 import json
 import logging
@@ -10,12 +11,13 @@ import aws_lambda_powertools.utilities.parser
 import aws_lambda_powertools.utilities.parser.models
 import boto3
 import psycopg
+from aws_lambda_powertools.utilities.circuit_breaker_alpha import circuit_breaker
 
 from . import auth
 
 # Root powertools package gets imported by submodules, doesn't need explicit import
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="api.watches")
-_logger.setLevel(level=logging.DEBUG)
+_logger.setLevel(level=logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 
@@ -67,16 +69,22 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
                     if authenticated_user_id is None:
                         return auth.lambda_response_auth_failed()
 
+                    _logger.debug(f"Auth user ID: {str(authenticated_user_id)}")
+
                     # Get the user's info from the DB
                     start_time: float = time.perf_counter()
 
                     # Intentionally not wasting DB CPU sorting; that's compute the browser's JS will do
                     cur.execute(
                         """
-                        SELECT      user_searches.user_search_id, search_name, monitored_urls.url
+                        SELECT      user_searches.user_search_id, 
+                                    search_name, 
+                                    monitored_urls.url,
+                                    monitored_urls.contents_changed_timestamp,
+                                    monitored_urls.last_scrape_timestamp,
+                                    monitored_urls.matching_sailings_found
                         FROM        user_searches
-                            JOIN    monitored_urls
-                            ON      user_searches.watched_url = monitored_urls.url_id
+                        JOIN        monitored_urls ON user_searches.watched_url = monitored_urls.url_id 
                         WHERE       user_searches.user_id = %s;
                         """,
 
@@ -86,19 +94,38 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
                     _logger.debug( "DB query for user's watched searches completed in "
                                   f"{end_time - start_time:.03f} seconds" )
 
-                    watches_rows: list[tuple] = cur.fetchall()
+                    watches_tuples: list[tuple] = cur.fetchall()
+
+                    _logger.debug(f"watches_tuples has {len(watches_tuples)} entries")
 
     except Exception as e:
         _logger.critical(f"Database error: {e}")
         raise
 
-    watches: list[dict] = [
-        {
-            "watch_id"      : curr_watch[0],
-            "watch_name"    : curr_watch[1],
-            "url"           : curr_watch[2],
-        } for curr_watch in watches_rows
-    ]
+    watches: dict[str, dict[str, str | None]] = {}
+    for curr_tuple in watches_tuples:
+        watch_last_update_str: str = _get_timestamp_from_uuid7(curr_tuple[0]).isoformat(sep=" ", timespec="seconds")
+        change_timestamp: str
+        if curr_tuple[3] is not None:
+            change_timestamp = curr_tuple[3].isoformat(sep=" ", timespec="seconds")
+        else:
+            change_timestamp = watch_last_update_str
+        last_check_timestamp: str
+        if curr_tuple[4] is not None:
+            last_check_timestamp = curr_tuple[4].isoformat(sep=" ", timespec="seconds")
+        else:
+            last_check_timestamp = watch_last_update_str
+
+        watches[str(curr_tuple[0])] = {
+            "watch_last_updated_timestamp"      : watch_last_update_str,
+            "watch_name"                        : curr_tuple[1],
+            "url"                               : curr_tuple[2],
+            "search_contents_changed_timestamp" : change_timestamp,
+            "search_last_checked_timestamp"     : last_check_timestamp,
+            "matching_sailings_found"           : curr_tuple[5],
+        }
+
+    _logger.info(f"Returning details for all watches found in the DB (quantity: {len(watches)}) for this user")
 
     return {
         "statusCode"    : 200,
@@ -134,3 +161,21 @@ def _read_parameter_store_params(parameter_names: list[str]) -> dict[str, str]:
     for param_idx, param_details in enumerate(retrieved_params):
         return_dict[param_details['Name']] = retrieved_params[param_idx]['Value']
     return return_dict
+
+
+def _get_timestamp_from_uuid7(target_uuid: uuid.UUID) -> datetime.datetime:
+    # 1. Access the raw 128-bit integer value of the UUID
+    uuid_int: int = target_uuid.int
+
+    # 2. Bit-shift 80 bits to the right to isolate the leading 48-bit timestamp
+    timestamp_ms: int = uuid_int >> 80
+
+    # 3. Convert millisecond integer count down to a fractional second float
+    timestamp_seconds: float = timestamp_ms / 1000.0
+
+    # 4. Construct a timezone-aware datetime instance using UTC baseline
+    extracted_timestamp: datetime.datetime = datetime.datetime.fromtimestamp(timestamp_seconds,
+                                                                             tz=datetime.timezone.utc)
+
+    # 5. Extract and return the localized calendar date component
+    return extracted_timestamp

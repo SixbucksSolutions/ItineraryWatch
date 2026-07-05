@@ -4,8 +4,12 @@ DROP TABLE IF EXISTS monitored_urls;
 
 CREATE TABLE users (
     user_id             UUID                        PRIMARY KEY         DEFAULT uuidv7(),
-    email               VARCHAR                     UNIQUE NOT NULL,
+    email               VARCHAR                     NOT NULL,
     user_last_emailed   TIMESTAMP WITH TIME ZONE,
+
+
+    -- Constraint to reject mixed-case or uppercase email insertions 
+    CONSTRAINT enforce_lowercase_email CHECK (email = LOWER(email)),
 
     CONSTRAINT enforce_uuid_v7
         CHECK (uuid_extract_version(user_id) = 7)
@@ -13,6 +17,9 @@ CREATE TABLE users (
 
 -- speeds up searches for users eligible for another change notification email
 CREATE INDEX idx_users_user_last_emailed    ON users(user_last_emailed);
+
+-- Need an index so the ON CONFLICT works
+CREATE UNIQUE INDEX idx_users_email_case_insensitive ON users (LOWER(email));
 
 
 CREATE TABLE monitored_urls (
@@ -24,6 +31,7 @@ CREATE TABLE monitored_urls (
     last_scrape_timestamp       TIMESTAMP WITH TIME ZONE,
 
     contents_changed_timestamp  TIMESTAMP WITH TIME ZONE,
+    matching_sailings_found     INTEGER,
 
     -- Enforces that the UUID *must* be version 7
     CONSTRAINT enforce_uuid_v7

@@ -209,12 +209,13 @@ def _get_or_assign_user_id(validated_jwt_claims: dict[str, typing.Any]) -> uuid.
 
     # Use an upsert query that always returns the user_id
     upsert_query: str = """
-    INSERT INTO             users (email) 
-    VALUES                  (%s)
-    ON CONFLICT (email) 
-        DO UPDATE           SET email = EXCLUDED.email
-    RETURNING               user_id;
-    """
+        INSERT INTO     users (email) 
+        VALUES          (LOWER(%s)) 
+        ON CONFLICT     (LOWER(email)) 
+        DO UPDATE SET 
+            email =     EXCLUDED.email
+        RETURNING       user_id;
+        """
 
     logged_in_user_email: str = validated_jwt_claims["email"]
 
