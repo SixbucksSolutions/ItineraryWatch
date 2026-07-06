@@ -146,6 +146,24 @@ functions:
         - 'src/web_api/api_watches.py'
         - 'src/aws-rds-global-bundle.pem'
 
+  api_watch:
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
+    handler: src/web_api/api_watch.lambda_handler_apigw
+    memorySize: 1769
+    events:
+      - httpApi:
+          method: GET
+          path: /api/v001/watch/{user_search_id}
+    warmup:
+      default:
+        enabled: true   # Avoid cold start as it's user facing; ping every five mins to keep resident
+    package:
+      patterns:
+        - 'src/web_api/auth.py'
+        - 'src/web_api/api_watch.py'
+        - 'src/aws-rds-global-bundle.pem'
+
+
 plugins:
   - serverless-domain-manager
   - serverless-plugin-warmup

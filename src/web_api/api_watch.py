@@ -12,11 +12,10 @@ import aws_lambda_powertools.utilities.parser.models
 import boto3
 import psycopg
 
-
 from . import auth
 
 # Root powertools package gets imported by submodules, doesn't need explicit import
-_logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="api.watches")
+_logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="api.watch")
 _logger.setLevel(level=logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
@@ -45,6 +44,9 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
                          _context: aws_lambda_powertools.utilities.typing.LambdaContext) -> dict[str, typing.Any]:
 
     postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
+
+    # TODO: get user search ID from path param
+    user_search_id: uuid.UUID = uuid.UUID("019f1404-2bc0-793a-ae0a-95d4a6532abd")
 
     try:
         # Context manager syntax ("with") gets the connection auto-closed at scope exit, commits if no errors
@@ -77,62 +79,63 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
                     # Intentionally not wasting DB CPU sorting; that's compute the browser's JS will do
                     cur.execute(
                         """
-                        SELECT      user_searches.user_search_id, 
-                                    search_name, 
+                        SELECT      search_name, 
                                     monitored_urls.url,
                                     monitored_urls.contents_changed_timestamp,
                                     monitored_urls.last_scrape_timestamp,
-                                    monitored_urls.matching_sailings_found
                         FROM        user_searches
                         JOIN        monitored_urls ON user_searches.watched_url = monitored_urls.url_id 
-                        WHERE       user_searches.user_id = %s;
+                        WHERE       user_searches.user_id = %s AND
+                                    user_searches.user_search_id = %s;
                         """,
 
-                        (authenticated_user_id, )
+                        (authenticated_user_id, user_search_id)
                     )
                     end_time: float = time.perf_counter()
                     _logger.debug( "DB query for user's watched searches completed in "
                                   f"{end_time - start_time:.03f} seconds" )
 
-                    watches_tuples: list[tuple] = cur.fetchall()
-
-                    _logger.debug(f"watches_tuples has {len(watches_tuples)} entries")
-
+                    watch_tuple: tuple | None = cur.fetchone()
     except Exception as e:
         _logger.critical(f"Database error: {e}")
         raise
 
-    watches: dict[str, dict[str, str | None]] = {}
-    for curr_tuple in watches_tuples:
-        watch_last_update_str: str = _get_timestamp_from_uuid7(curr_tuple[0]).isoformat(sep=" ", timespec="seconds")
+    watch_details: dict = {}
+
+    if watch_tuple:
+        watch_last_update_str: str = _get_timestamp_from_uuid7(user_search_id).isoformat(sep=" ", timespec="seconds")
         change_timestamp: str
-        if curr_tuple[3] is not None:
-            change_timestamp = curr_tuple[3].isoformat(sep=" ", timespec="seconds")
+        if watch_tuple[2] is not None:
+            change_timestamp = watch_tuple[2].isoformat(sep=" ", timespec="seconds")
         else:
             change_timestamp = watch_last_update_str
         last_check_timestamp: str
-        if curr_tuple[4] is not None:
-            last_check_timestamp = curr_tuple[4].isoformat(sep=" ", timespec="seconds")
+        if watch_tuple[3] is not None:
+            last_check_timestamp = watch_tuple[3].isoformat(sep=" ", timespec="seconds")
         else:
             last_check_timestamp = watch_last_update_str
 
-        watches[str(curr_tuple[0])] = {
+        watch_details = {
             "watch_last_updated_timestamp"      : watch_last_update_str,
-            "watch_name"                        : curr_tuple[1],
-            "url"                               : curr_tuple[2],
+            "watch_name"                        : watch_tuple[0],
+            "url"                               : watch_tuple[1],
             "search_contents_changed_timestamp" : change_timestamp,
             "search_last_checked_timestamp"     : last_check_timestamp,
-            "matching_sailings_found"           : curr_tuple[5],
-        }
 
-    _logger.info(f"Returning details for all watches found in the DB (quantity: {len(watches)}) for this user")
+            # TODO: Get this from S3 along with a bunch of other data
+            # "matching_sailings_found"           : None,
+        }
+        _logger.info(f"Returning details for user watch {str(user_search_id)}")
+
+    else:
+        _logger.warning(f"Caller requested details for non-existent user watch {str(user_search_id)}")
 
     return {
         "statusCode"    : 200,
         "headers"       : {
             "Content-Type"  : "application/json"
         },
-        "body"          : json.dumps(watches, default=str),
+        "body"          : json.dumps(watch_details, default=str),
     }
 
 
