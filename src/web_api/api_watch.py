@@ -44,8 +44,6 @@ def avoid_warmup_errors(handler):
 def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.APIGatewayProxyEventV2Model,
                          _context: aws_lambda_powertools.utilities.typing.LambdaContext) -> dict[str, typing.Any]:
 
-    postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
-
     if not event.pathParameters or "user_search_id" not in event.pathParameters:
         _logger.error("Endpoint got invoked without user_search_id path parameter")
         return {
@@ -61,6 +59,8 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
         }
 
     user_search_id: uuid.UUID = uuid.UUID(event.pathParameters["user_search_id"])
+
+    postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
 
     try:
         # Context manager syntax ("with") gets the connection auto-closed at scope exit, commits if no errors
