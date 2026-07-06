@@ -6,6 +6,7 @@ import time
 import typing
 import uuid
 from ctypes import cast
+from unicodedata import category
 
 import aws_lambda_powertools.utilities.typing
 import aws_lambda_powertools.utilities.parser
@@ -58,7 +59,26 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
             ),
         }
 
-    user_search_id: uuid.UUID = uuid.UUID(event.pathParameters["user_search_id"])
+    try:
+        user_search_id: uuid.UUID = uuid.UUID(event.pathParameters["user_search_id"])
+        if user_search_id.version != 7:
+            raise ValueError("Not a v7 UUID")
+    except ValueError as e:
+        _logger.error("user_search_id path parameter passed was not a valid UUID")
+        return {
+            "statusCode"    : 400,
+            "headers"       : {
+                "Content-Type"  : "application/json"
+            },
+            "body"          : json.dumps(
+                {
+                    "error"         :  "user_search_id path parameter "
+                                      f"\"{event.pathParameters["user_search_id"]}\" not a valid UUIDv7"
+                }
+            ),
+        }
+
+    _logger.info(f"Caller passed valid UUIDv7 {str(user_search_id)}")
 
     postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
 
