@@ -93,6 +93,40 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
             ),
         }
 
+    if event.queryStringParameters:
+        _logger.debug("Caller included query string parameters")
+
+        supported_query_string_param_keys = {
+            "search_result_timestamp",
+        }
+
+        # Make sure all query string parameters are supported values -- if any
+        if not all(
+                    query_string_param_key in supported_query_string_param_keys for query_string_param_key
+                    in event.queryStringParameters
+                ):
+            return {
+                "statusCode": 422,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": f"Unsupported query string parameter(s) in: {json.dumps(event.queryStringParameters)}",
+            }
+
+        if "search_result_timestamp" in event.queryStringParameters:
+            requested_timestamp: str = event.queryStringParameters["search_result_timestamp"]
+            if requested_timestamp != "latest":
+                return {
+                    "statusCode": 422,
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "body": f"Unsupported search result timestamp: {requested_timestamp}",
+                }
+
+            _logger.info( "Caller requested search result timestamp: "
+                         f"{event.queryStringParameters["search_result_timestamp"]}")
+
     url_id: uuid.UUID = db_response["url_id"]
 
     # Remove that key from the db response, not going to expose it outside API
