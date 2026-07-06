@@ -82,10 +82,11 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
                         SELECT      search_name, 
                                     monitored_urls.url,
                                     monitored_urls.contents_changed_timestamp,
-                                    monitored_urls.last_scrape_timestamp,
+                                    monitored_urls.last_scrape_timestamp
                         FROM        user_searches
                         JOIN        monitored_urls ON user_searches.watched_url = monitored_urls.url_id 
-                        WHERE       user_searches.user_id = %s AND
+                        WHERE       user_searches.user_id = %s
+                                    AND
                                     user_searches.user_search_id = %s;
                         """,
 
