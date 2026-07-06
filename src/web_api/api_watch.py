@@ -136,8 +136,14 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
         "summary": db_response,
     }
 
-    sailings_data: list[dict[str, typing.Any]] | None = _get_s3_data(url_id)
-    api_response["search_result_sets"] = sailings_data
+    sailings_data: tuple[datetime.datetime, list[dict[str, typing.Any]]] | None = _get_s3_data(url_id)
+
+    if not sailings_data:
+        api_response["search_result_sets"] = sailings_data
+    else:
+        api_response["search_result_sets"] = {
+            sailings_data[0].isoformat(sep=" ", timespec="minutes"): sailings_data[1],
+        }
 
     _logger.debug("Returning response")
     _logger.debug(json.dumps(api_response, indent=4))
@@ -221,12 +227,12 @@ def _do_db_query(
                         last_check_timestamp = watch_last_update_str
 
                     watch_summary: dict[str, str | datetime.datetime] = {
-                        "watch_name"                            : watch_tuple[0],
-                        "url_id"                                : watch_tuple[1],
-                        "url"                                   : watch_tuple[2],
-                        "watch_last_updated_timestamp"          : watch_last_update_str,
-                        "search_contents_changed_timestamp"     : change_timestamp,
-                        "search_last_checked_timestamp"         : last_check_timestamp,
+                        "name"                                      : watch_tuple[0],
+                        "url_id"                                    : watch_tuple[1],
+                        "url"                                       : watch_tuple[2],
+                        "last_updated_timestamp"                    : watch_last_update_str,
+                        "search_contents_last_changed_timestamp"    : change_timestamp,
+                        "search_last_run_timestamp"                 : last_check_timestamp,
                     }
                     _logger.info(f"Returning details for user watch {str(user_search_id)}")
 
@@ -277,17 +283,21 @@ def _event_validation(
     return user_search_id
 
 
-def _get_s3_data(monitored_url_id: uuid.UUID) -> list[dict[str, typing.Any]] | None:
+def _get_s3_data(monitored_url_id: uuid.UUID) -> tuple[datetime.datetime, list[dict[str, typing.Any]]] | None:
     # Get the monitored URL for this search
     s3_bucket_ssm_param: str = "/itinerary_watch/s3/bucket_name"
-    app_s3_bucket_name: str = _ssm_client.get_parameter(Name=s3_bucket_ssm_param)['Parameter']['Value']
+    ssm_response = _ssm_client.get_parameter(Name=s3_bucket_ssm_param)
+    if not "Parameter" in ssm_response or "Value" not in ssm_response["Parameter"]:
+        raise RuntimeError("Param Store did not have key \"{s3_bucket_ssm_param}\"")
+
+    app_s3_bucket_name: str = ssm_response['Parameter']['Value']
 
     # Get latest search results for the monitored URL
     return _get_latest_serialized_search_results_for_query(app_s3_bucket_name, monitored_url_id)
 
 
 def _get_latest_serialized_search_results_for_query(
-        app_s3_bucket_name: str, url_id: uuid.UUID) -> list[dict[str, typing.Any]] | None:
+        app_s3_bucket_name: str, url_id: uuid.UUID) -> tuple[datetime.datetime, list[dict[str, typing.Any]]] | None:
 
     # List *.json for this monitored URL
     prefix_to_search: str = f"db/monitored_urls/{str(url_id)}/"
@@ -318,7 +328,7 @@ def _get_latest_serialized_search_results_for_query(
 
     parsed_json_contents: list[dict] = json.loads(file_content)
 
-    return parsed_json_contents
+    return state_file_timestamp, parsed_json_contents
 
 
 def _s3_glob(bucket_name: str, prefix_to_search: str, file_extension: str) -> typing.Iterator[str]:
