@@ -53,7 +53,7 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
             },
             "body"          : json.dumps(
                 {
-                    "error": "Invoked without user_search_id path parameter"
+                    "error"         : "Invoked without user_search_id path parameter"
                 }
             ),
         }
