@@ -5,6 +5,7 @@ import logging
 import time
 import typing
 import uuid
+from ctypes import cast
 
 import aws_lambda_powertools.utilities.typing
 import aws_lambda_powertools.utilities.parser
@@ -45,8 +46,21 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
 
     postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()
 
-    # TODO: get user search ID from path param
-    user_search_id: uuid.UUID = uuid.UUID("019f1404-2bc0-793a-ae0a-95d4a6532abd")
+    if not event.pathParameters or "user_search_id" not in event.pathParameters:
+        _logger.error("Endpoint got invoked without user_search_id path parameter")
+        return {
+            "statusCode"    : 400,
+            "headers"       : {
+                "Content-Type"  : "application/json"
+            },
+            "body"          : json.dumps(
+                {
+                    "error": "Invoked without user_search_id path parameter"
+                }
+            ),
+        }
+
+    user_search_id: uuid.UUID = uuid.UUID(event.pathParameters["user_search_id"])
 
     try:
         # Context manager syntax ("with") gets the connection auto-closed at scope exit, commits if no errors
