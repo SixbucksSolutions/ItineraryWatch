@@ -151,7 +151,11 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
     return {
         "statusCode"    : 200,
         "headers"       : {
-            "Content-Type"  : "application/json"
+            "Content-Type"  : "application/json",
+
+            # *Aggressively* encourage browser to cache this response for 12 hours (43,200 seconds),
+            #       as the backend only scrapes it once per day
+            "Cache-Control" : "private, max-age=43200, immutable",
         },
         "body"          : json.dumps(api_response),
     }

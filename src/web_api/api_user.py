@@ -95,7 +95,12 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
     return {
         "statusCode"    : 200,
         "headers": {
-            "Content-Type": "application/json"
+            "Content-Type"  : "application/json",
+
+            # *Aggressively* encourage browser to cache this response for up to a week -- if your email address
+            #       changes, you're a new user in our system
+            "Cache-Control" : "private, max-age=604800, immutable",
+
         },
         "body"          : json.dumps(authenticated_user_info, default=str),
     }

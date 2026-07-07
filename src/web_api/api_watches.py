@@ -130,7 +130,13 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
     return {
         "statusCode"    : 200,
         "headers"       : {
-            "Content-Type"  : "application/json"
+            "Content-Type"      : "application/json",
+
+            # Every header Gemini knows about to tell browsers this data is radioactive to the cache,
+            #       don't you DARE consider caching this data UNDER ANY CIRCUMSTANCES
+            "Cache-Control"     : "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma"            : "no-cache",   # Catches ancient HTTP/1.0 clients
+            "Expires"           : "0",          # 0 is a special value meaning "already expired"
         },
         "body"          : json.dumps(watches, default=str),
     }
