@@ -2,9 +2,11 @@ import datetime
 import functools
 import json
 import logging
+import math
 import time
 import typing
 import uuid
+
 
 import aws_lambda_powertools.utilities.typing
 import aws_lambda_powertools.utilities.parser
@@ -148,14 +150,30 @@ def lambda_handler_apigw(event: aws_lambda_powertools.utilities.parser.models.AP
     _logger.debug("Returning response")
     _logger.debug(json.dumps(api_response, indent=4))
 
+    seconds_data_can_be_cached_in_browser: int
+    if db_response["search_last_run_timestamp"] is None:
+        # If we've never run the search, assume we're gonna scrape it real soon now
+        seconds_data_can_be_cached_in_browser = 60
+    else:
+        # We can cache until the minute we're going to run the next data retrieve
+        next_scrape_time: datetime.datetime = datetime.datetime.fromisoformat(
+            db_response["search_last_run_timestamp"]) + datetime.timedelta(hours=24)
+        time_difference_seconds: int = math.floor(
+            (next_scrape_time - datetime.datetime.now(tz=datetime.timezone.utc)).total_seconds())
+
+        # If result is positive, next scrape time is in the future
+        if time_difference_seconds > 0:
+            seconds_data_can_be_cached_in_browser = time_difference_seconds
+        else:
+            seconds_data_can_be_cached_in_browser = 60
+
     return {
         "statusCode"    : 200,
         "headers"       : {
             "Content-Type"  : "application/json",
 
-            # *Aggressively* encourage browser to cache this response for 12 hours (43,200 seconds),
-            #       as the backend only scrapes it once per day
-            "Cache-Control" : "private, max-age=43200, immutable",
+            # *Aggressively* encourage browser to cache this response until next time data will be scraped
+            "Cache-Control" : f"private, max-age={seconds_data_can_be_cached_in_browser}, immutable",
         },
         "body"          : json.dumps(api_response),
     }
