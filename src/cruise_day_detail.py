@@ -10,12 +10,14 @@ class ShipActivityLocation:
 
 
 class ActivityType(enum.Enum):
-    PORT_EMBARK     = enum.auto()
-    PORT_DOCKED     = enum.auto()
-    PORT_TENDERED   = enum.auto()
-    PORT_CRUISING   = enum.auto()
-    PORT_DEBARK     = enum.auto()
-    AT_SEA          = enum.auto()
+    PORT_EMBARK             = enum.auto()
+    PORT_DOCKED             = enum.auto()
+    PORT_TENDERED           = enum.auto()
+    PORT_CRUISING           = enum.auto()
+    PORT_DEBARK             = enum.auto()
+    AT_SEA                  = enum.auto()
+    PORT_DOCKED_OVERNIGHT   = enum.auto()
+    PORT_TENDERED_OVERNIGHT = enum.auto()
 
 
 @dataclasses.dataclass(frozen=True)

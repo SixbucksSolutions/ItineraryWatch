@@ -95,17 +95,21 @@ def serialize_cruise_sailing(sailing: CruiseSailing) -> dict:
     day_details: list[dict] = []
 
     activity_type_encodings: dict[cruise_day_detail.ActivityType, str] = {
-        cruise_day_detail.ActivityType.PORT_EMBARK: "PORT_EMBARK",
-        cruise_day_detail.ActivityType.PORT_DEBARK: "PORT_DEBARK",
-        cruise_day_detail.ActivityType.PORT_DOCKED: "PORT_DOCKED",
-        cruise_day_detail.ActivityType.PORT_TENDERED: "PORT_TENDERED",
-        cruise_day_detail.ActivityType.PORT_CRUISING: "PORT_CRUISING",
-        cruise_day_detail.ActivityType.AT_SEA: "AT_SEA",
+        cruise_day_detail.ActivityType.PORT_EMBARK              : "PORT_EMBARK",
+        cruise_day_detail.ActivityType.PORT_DEBARK              : "PORT_DEBARK",
+        cruise_day_detail.ActivityType.PORT_DOCKED              : "PORT_DOCKED",
+        cruise_day_detail.ActivityType.PORT_TENDERED            : "PORT_TENDERED",
+        cruise_day_detail.ActivityType.PORT_CRUISING            : "PORT_CRUISING",
+        cruise_day_detail.ActivityType.AT_SEA                   : "AT_SEA",
+        cruise_day_detail.ActivityType.PORT_DOCKED_OVERNIGHT    : "PORT_DOCKED_OVERNIGHT",
+        cruise_day_detail.ActivityType.PORT_TENDERED_OVERNIGHT  : "PORT_TENDERED_OVERNIGHT",
     }
 
     for day in sailing.day_details:
         serialized_activities: list[dict] = []
         for activity in day.activities:
+            if activity.activity_type not in activity_type_encodings:
+                raise ValueError(f"Unsupported activity type: {activity.activity_type}")
             start_value: str | None
             end_value: str | None
             if activity.activity_start_time:

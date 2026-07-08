@@ -13,8 +13,9 @@ from src import cruise_sailing
 
 
 class _CelebrityShipCode(enum.StrEnum):
-    APEX            = "AP"
+    # Active Ocean Fleet as of 2026-07
     ASCENT          = "AT"
+    APEX            = "AX"
     BEYOND          = "BY"
     CONSTELLATION   = "CS"
     ECLIPSE         = "EC"
@@ -28,8 +29,9 @@ class _CelebrityShipCode(enum.StrEnum):
     SILHOUETTE      = "SI"
     SUMMIT          = "SM"
     XCEL            = "XC"
-    XPEDITION       = "XP"
-    XPLORATION      = "XR"
+
+    # Upcoming Fleet Additions
+    XCITE           = "XI"  # Entering service 2028 (Placeholder internal system code)
 
 
 _ship_names: dict[_CelebrityShipCode, str] = {
@@ -47,9 +49,10 @@ _ship_names: dict[_CelebrityShipCode, str] = {
     _CelebrityShipCode.SOLSTICE      : "Solstice",
     _CelebrityShipCode.SILHOUETTE    : "Silhouette",
     _CelebrityShipCode.SUMMIT        : "Summit",
-    _CelebrityShipCode.XCEL          : "Excel",
-    _CelebrityShipCode.XPEDITION     : "Xpedition",
-    _CelebrityShipCode.XPLORATION    : "Xploration",
+    _CelebrityShipCode.XCEL          : "Xcel",
+
+    # Future
+    _CelebrityShipCode.XCITE         : "Xcite",
 }
 
 _ship_classes: dict[_CelebrityShipCode, str | None] = {
@@ -68,8 +71,9 @@ _ship_classes: dict[_CelebrityShipCode, str | None] = {
     _CelebrityShipCode.SILHOUETTE    : "Solstice",
     _CelebrityShipCode.SUMMIT        : "Millennium",
     _CelebrityShipCode.XCEL          : "Edge",
-    _CelebrityShipCode.XPEDITION     : None,
-    _CelebrityShipCode.XPLORATION    : None,
+
+    # Future
+    _CelebrityShipCode.XCITE         : "Edge",
 }
 
 
@@ -350,34 +354,45 @@ class Celebrity:
 
                 for curr_activity in day_api_details["ports"]:
                     if curr_activity["activity"] in ["DOCKED", "TENDERED", "CRUISING"]:
-                        if curr_activity["arrivalTime"] is None or \
-                                curr_activity["departureTime"] is None:
-                            raise RuntimeError( "Unsupported API data for at activity during port day: "
-                                               f"{json.dumps(curr_activity, indent=4, sort_keys=True)}")
-
                         activity_type: cruise_day_detail.ActivityType
                         if curr_activity["activity"] == "DOCKED":
-                            activity_type = cruise_day_detail.ActivityType.PORT_DOCKED
+                            if curr_activity["departureTime"] is not None:
+                                activity_type = cruise_day_detail.ActivityType.PORT_DOCKED
+                            else:
+                                # If the docked activity doesn't end, ship is overnighting there
+                                activity_type = cruise_day_detail.ActivityType.PORT_DOCKED_OVERNIGHT
                         elif curr_activity["activity"] == "TENDERED":
-                            activity_type = cruise_day_detail.ActivityType.PORT_TENDERED
+                            if curr_activity["departureTime"] is not None:
+                                activity_type = cruise_day_detail.ActivityType.PORT_TENDERED
+                            else:
+                                activity_type = cruise_day_detail.ActivityType.PORT_TENDERED_OVERNIGHT
                         elif curr_activity["activity"] == "CRUISING":
                             activity_type = cruise_day_detail.ActivityType.PORT_CRUISING
                         else:
                             raise RuntimeError( "Unsupported activity type: "
                                                f"{json.dumps(curr_activity, indent=4, sort_keys=True)}")
 
+                        start_time: datetime.time | None
+                        if curr_activity["arrivalTime"]:
+                            start_time = datetime.time.fromisoformat(curr_activity["arrivalTime"])
+                        else:
+                            start_time = None
+
+                        end_time: datetime.time | None
+                        if curr_activity["departureTime"]:
+                            end_time = datetime.time.fromisoformat(curr_activity["departureTime"])
+                        else:
+                            end_time = None
+
                         day_activities.append(
                             cruise_day_detail.ShipActivity(
                                 activity_type=activity_type,
-                                activity_start_time=datetime.time.fromisoformat(
-                                    curr_activity["arrivalTime"]),
-                                activity_end_time=datetime.time.fromisoformat(
-                                    curr_activity["departureTime"]),
+                                activity_start_time=start_time,
+                                activity_end_time=end_time,
                                 activity_location=cruise_day_detail.ShipActivityLocation(
                                     curr_activity["port"]["name"],
                                     curr_activity["port"]["region"]
                                 ),
-
                             )
                         )
 
