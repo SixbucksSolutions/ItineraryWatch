@@ -108,10 +108,6 @@ class Norwegian:
 
     @staticmethod
     def perform_itinerary_search(search_url: str) -> list[cruise_sailing.CruiseSailing]:
-        """
-            Parses a URL and checks if the path is exactly '/vacations'.
-            Ignores query strings, fragments, and domains.
-            """
         parsed_url: urllib.parse.ParseResult = urllib.parse.urlparse(search_url)
 
         # Check if the path portion matches exactly
@@ -121,43 +117,40 @@ class Norwegian:
         query_tuples: list[tuple[str, str]] = urllib.parse.parse_qsl(parsed_url.query, keep_blank_values=True)
 
         # 3. Build the dictionary and check for duplicates
-        query_parameters: dict[str, str] = {}
+        api_search_filters: dict[str, str] = {}
 
-        param_key_filter: set[str] = {
+        supported_search_filters: set[str] = {
             "dates",
             "destinations",
             "durations",
         }
 
         for key, value in query_tuples:
-            if key in query_parameters:
+            if key in query_tuples:
                 raise ValueError(f"Duplicate query parameter detected: '{key}' in URL {search_url}")
-            if key in param_key_filter:
-               query_parameters[key] = value
+            if key in supported_search_filters:
+               api_search_filters[key] = value
 
-        Norwegian._logger.debug("Parsed/filtered search criteria:")
-        Norwegian._logger.debug(json.dumps(query_parameters, indent=4))
+        search_results: list[cruise_sailing.CruiseSailing] = Norwegian._execute_api_query(api_search_filters)
+        return search_results
 
-        Norwegian._logger.warning(f"Requested to run Norwegian search on {search_url}, not implemented yet")
+
+    @staticmethod
+    def _execute_api_query(api_search_filters: dict[str, str]) -> list[cruise_sailing.CruiseSailing]:
+        Norwegian._logger.debug("Search criteria we're passing to API:")
+        Norwegian._logger.debug(json.dumps(api_search_filters, indent=4))
 
         return []
 
 
-
-
     @staticmethod
-    def _celebrity_api_query(graphql_filter_str: str) -> list[cruise_sailing.CruiseSailing]:
-        pass
-
-
-    @staticmethod
-    def _parse_graphql_response_json(parsed_graphql_json: dict[str, typing.Any],
+    def _parse_api_response(parsed_graphql_json: dict[str, typing.Any],
                                     logging_level: int | str = logging.WARNING) -> list[cruise_sailing.CruiseSailing]:
         pass
 
 
     @staticmethod
-    def _parse_day_details(master_sailing_graphql_node: dict[str, typing.Any],
+    def _parse_api_response_day_details(master_sailing_graphql_node: dict[str, typing.Any],
                            curr_itinerary_sailing: dict[str, typing.Any]) -> list[cruise_day_detail.CruiseDayDetail]:
 
         pass
