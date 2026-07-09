@@ -15,10 +15,11 @@ from src import cruise_lines
 from src import cruise_sailing
 
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="itinerary_watch_scraper")
-_logger.setLevel(logging.INFO)
+_logger.setLevel(logging.DEBUG)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 _s3_client = boto3.client("s3", region_name="us-east-2")
+
 
 @_logger.inject_lambda_context(log_event=True)
 def lambda_entry_point_sns(event: dict[str, typing.Any],
@@ -44,7 +45,7 @@ def _process_sns_event_record(
     _logger.info(f"Starting to process new SNS message with ID {str(curr_sns_message_id)}")
 
     try:
-        parsed_payload: dict[str, int | str] = json.loads(curr_record.Sns.Message)
+        parsed_payload: dict[str, int | str] = json.loads(typing.cast(str, curr_record.Sns.Message))
     except Exception as e:
         _logger.warning(f"Could not parse JSON from SNS message payload, error: {e}")
         return
@@ -126,8 +127,37 @@ def _valid_url(possible_url: str) -> bool:
 def _scrape_search_url(url: str, url_id: uuid.UUID) -> None:
     _logger.info(f"Running search on URL {url}")
 
-    returned_matches: list[cruise_sailing.CruiseSailing] = cruise_lines.Celebrity.perform_itinerary_search(url)
-    # _logger.debug(json.dumps(returned_matches, indent=4, sort_keys=True, default=str))
+    # Send URL to proper cruise line class
+    parsed_url: urllib.parse.ParseResult = urllib.parse.urlparse(url)
+
+    # make sure it's HTTPS
+    if parsed_url.scheme != "https":
+        _logger.warning(f"Scrape URL was not HTTPS, ignoring: {url}")
+        return
+
+    # Note: hostname is automatically lowercased by urllib
+    hostname: str | None = parsed_url.hostname
+
+    if not hostname:
+        _logger.warning(f"Scrape URL did not have a hostname, ignoring: {url}")
+        return
+
+    hostname_portions: list[str] = hostname.split(".")
+    if len(hostname_portions) < 2:
+        _logger.warning(f"Scrape URL did not have at least two hostname components, ignoring: {url}")
+        return
+
+    base_domain_components: list[str] = hostname_portions[-2:]
+
+    returned_matches: list[cruise_sailing.CruiseSailing]
+    if base_domain_components == ['celebritycruises', 'com']:
+        returned_matches = cruise_lines.Celebrity.perform_itinerary_search(url)
+    elif base_domain_components == ['ncl', 'com']:
+        returned_matches = cruise_lines.Norwegian.perform_itinerary_search(url)
+    else:
+        raise NotImplementedError(f"Unsupported cruise line domain: {url}")
+
+    _logger.debug(json.dumps(returned_matches, indent=4, sort_keys=True, default=str))
 
     # Read Postgres connection details from Parameter Store
     postgres_connection_params: dict[str, str] = _get_pg_server_connection_details()

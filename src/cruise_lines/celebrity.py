@@ -7,6 +7,8 @@ import time
 import typing
 import urllib.parse
 
+import aws_lambda_powertools
+
 from src import cruise_day_detail
 from src import cruise_lines
 from src import cruise_sailing
@@ -79,8 +81,8 @@ _ship_classes: dict[_CelebrityShipCode, str | None] = {
 
 class Celebrity:
 
-    _logger: logging.Logger = logging.getLogger("cruise_lines.Celebrity")
-    _logger.setLevel(logging.INFO)
+    _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="cruise_line.Celebrity")
+    _logger.setLevel(logging.DEBUG)
 
     @staticmethod
     def perform_itinerary_search(search_url: str) -> list[cruise_sailing.CruiseSailing]:
