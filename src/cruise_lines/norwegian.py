@@ -66,12 +66,16 @@ _ship_names: dict[_ShipCode, str] = {
     _ShipCode.SPIRIT                : "Spirit",
     _ShipCode.STAR                  : "Star",
     _ShipCode.SUN                   : "Sun",
-    _ShipCode.VIVA                  : "Norwegian Viva",
+    _ShipCode.VIVA                  : "Viva",
 
     # Future
     _ShipCode.AURA                  : "Aura",
     _ShipCode.PRIMA_PLUS_4          : "TBA Prima Plus",
 }
+
+# Need a reverse dict because their API returns ship names node codes. Keys get upper cased
+#   for easy case-agnostic lookup
+_ship_codes: dict[str, _ShipCode] = {value.upper(): key for key, value in _ship_names.items()}
 
 _ship_classes: dict[_ShipCode, str | None] = {
     _ShipCode.AQUA                  : "Prima Plus",
@@ -103,7 +107,7 @@ _ship_classes: dict[_ShipCode, str | None] = {
 
 class Norwegian:
 
-    _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="cruise_line.Celebrity")
+    _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="cruise_line.Norwegian")
     _logger.setLevel(logging.DEBUG)
 
     @staticmethod
@@ -145,7 +149,9 @@ class Norwegian:
 
 
     @staticmethod
-    def _search_api_get_matching_itinerary_codes_and_package_ids(api_search_filters: dict[str, str]):
+    def _search_api_get_matching_itinerary_codes_and_package_ids(
+            api_search_filters: dict[str, str]) -> list[CruiseSailing]:
+
         itinerary_search_api_endpoint: str = "https://www.ncl.com/api/v2/vacations/search"
 
         search_api_query_params: dict[str, str | int] = api_search_filters
@@ -168,8 +174,7 @@ class Norwegian:
                         corrected_duration_values.append(known_filter)
                         break
                 else:
-                    Norwegian._logger.warning(f"Unknown duration filter value: {curr_candidate_duration}")
-                    return
+                    raise ValueError(f"Unknown duration filter value: {curr_candidate_duration}")
 
             # Now that we have  leaned up all values for search, put them back in query params
             search_api_query_params["durations"] = ",".join(corrected_duration_values)
@@ -199,27 +204,80 @@ class Norwegian:
         time_end: float = time.perf_counter()
 
         if not search_results_response.ok:
-            Norwegian._logger.warning(f"Querying Norwegian REST API endpoint {itinerary_search_api_endpoint} failed, "
-                                      f"code: {search_results_response.status_code}, "
-                                      f"error: {search_results_response.text}")
-            return
+            raise ValueError(f"Querying Norwegian REST API endpoint {itinerary_search_api_endpoint} failed, "
+                             f"code: {search_results_response.status_code}, "
+                             f"error: {search_results_response.text}")
 
         Norwegian._logger.debug(f"API query returned in {time_end - time_start:.03f} seconds, "
                                 f"returned {len(search_results_response.text):,} bytes")
 
-        search_results = search_results_response.json()
+        search_results: dict[str, typing.Any] = search_results_response.json()
         Norwegian._logger.debug(json.dumps(search_results, indent=4))
 
+        return Norwegian._parse_search_api_response(search_results)
 
 
     @staticmethod
-    def _parse_api_response(parsed_graphql_json: dict[str, typing.Any],
-                                    logging_level: int | str = logging.WARNING) -> list[cruise_sailing.CruiseSailing]:
-        pass
+    def _parse_search_api_response(search_results: dict[str, typing.Any]) -> list[cruise_sailing.CruiseSailing]:
+        # Example URL with JSON:
+        # https://www.ncl.com/api/v2/vacations/search?destinations=CARIBBEAN&dates=Jan-2028&durations=15,9-14&filterConfig=search-filters-configuration&limit=100&offset=0
+
+        itineraries: list[dict[str, typing.Any]] = search_results["itineraries"]
+
+        query_headers: dict[str, str] = {
+            # If we advertise we're Python requests, the CDN throws a 403 Access Denied; pretend to be Chrome on Win11
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/121.0.0.0 Safari/537.36",
+        }
+
+        parsed_sailings: list[cruise_sailing.CruiseSailing] = []
+        for curr_sailing in itineraries:
+            ship_code: _ShipCode = _ship_codes[curr_sailing["ship"]["code"]]
+
+            sailing_details: dict[str, str | dict[str, str]] = {
+                "unique_sailing"    : {
+                    "code"              : curr_sailing["code"],
+                    "package_id"        : curr_sailing["packageId"],
+                },
+                "itinerary_name"    : curr_sailing["title"],
+                "ship"              : {
+                    "code"              : ship_code,
+                    "name"              : _ship_names[ship_code],
+                }
+            }
+
+            Norwegian._logger.debug(f"Found sailing in search API result:")
+            Norwegian._logger.debug(json.dumps(sailing_details, indent=4))
+
+            # Hit separate API endpoint to get day-by_day intinerary
+            day_details_api_endpoint: str = ( "https://www.ncl.com/api/vacation-builder/"  
+                                             f"itinerary/{curr_sailing["code"]}/"
+                                             f"package/{curr_sailing["packageId"]}/events")
+
+            time_start: float = time.perf_counter()
+            day_details_response: requests.Response = requests.get(
+                day_details_api_endpoint, headers=query_headers)
+            time_end: float = time.perf_counter()
+
+            if not day_details_response.ok:
+                raise RuntimeError(f"Querying Norwegian REST API endpoint {day_details_api_endpoint} failed, "
+                                   f"code: {day_details_response.status_code}, "
+                                   f"error: {day_details_response.text}")
+
+            Norwegian._logger.debug(f"API query returned in {time_end - time_start:.03f} seconds, "
+                                    f"returned {len(day_details_response.text):,} bytes")
+
+            search_results: dict[str, typing.Any] = day_details_response.json()
+            Norwegian._logger.debug(json.dumps(search_results, indent=4))
+
+            # day_by_day_breakdown: list[cruise_day_detail.CruiseDayDetail] = \
+            #     Norwegian._parse_search_api_response_day_details(search_results)
+
+        return parsed_sailings
 
 
     @staticmethod
-    def _parse_api_response_day_details(master_sailing_graphql_node: dict[str, typing.Any],
-                           curr_itinerary_sailing: dict[str, typing.Any]) -> list[cruise_day_detail.CruiseDayDetail]:
+    def _parse_search_api_response_day_details(
+            search_results: dict[str, typing.Any] ) -> list[cruise_day_detail.CruiseDayDetail]:
 
-        pass
+        return []
