@@ -137,10 +137,79 @@ class Norwegian:
 
     @staticmethod
     def _execute_api_query(api_search_filters: dict[str, str]) -> list[cruise_sailing.CruiseSailing]:
-        Norwegian._logger.debug("Search criteria we're passing to API:")
+        Norwegian._logger.debug("Search criteria we're passisng to API:")
         Norwegian._logger.debug(json.dumps(api_search_filters, indent=4))
 
+        Norwegian._search_api_get_matching_itinerary_codes_and_package_ids(api_search_filters)
         return []
+
+
+    @staticmethod
+    def _search_api_get_matching_itinerary_codes_and_package_ids(api_search_filters: dict[str, str]):
+        itinerary_search_api_endpoint: str = "https://www.ncl.com/api/v2/vacations/search"
+
+        search_api_query_params: dict[str, str | int] = api_search_filters
+
+        # Clean up durations key, search API doesn't take tilde at the end of duration values
+        if "durations" in search_api_query_params:
+            duration_values: list[str] = str(search_api_query_params["durations"]).split(",")
+            corrected_duration_values: list[str] = []
+            known_duration_filters: list[str] = [
+                "1-4",
+                "5-8",
+                "9-14",
+                "15"
+            ]
+            for curr_candidate_duration in duration_values:
+                Norwegian._logger.debug(f"Candidate duration: {curr_candidate_duration}")
+                for known_filter in known_duration_filters:
+                    if curr_candidate_duration.startswith(known_filter):
+                        Norwegian._logger.debug(f"Candidate duration matched known: {known_filter}")
+                        corrected_duration_values.append(known_filter)
+                        break
+                else:
+                    Norwegian._logger.warning(f"Unknown duration filter value: {curr_candidate_duration}")
+                    return
+
+            # Now that we have  leaned up all values for search, put them back in query params
+            search_api_query_params["durations"] = ",".join(corrected_duration_values)
+
+        # Add in extra params used during site reverse engineering
+        search_api_query_params.update(
+            {
+                "filterConfig"  : "search-filters-configuration",
+                "limit"         : 12,
+                "offset"        : 0,
+            }
+        )
+
+        Norwegian._logger.debug(
+            f"Full list of parameter being passed to API endpoint {itinerary_search_api_endpoint}:")
+        Norwegian._logger.debug(json.dumps(search_api_query_params, indent=4))
+
+        query_headers: dict[str, str] = {
+            # If we advertise we're Python requests, the CDN throws a 403 Access Denied; pretend to be Chrome on Win11
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/121.0.0.0 Safari/537.36",
+        }
+
+        time_start: float = time.perf_counter()
+        search_results_response: requests.Response = requests.get(
+            itinerary_search_api_endpoint, headers=query_headers, params=search_api_query_params)
+        time_end: float = time.perf_counter()
+
+        if not search_results_response.ok:
+            Norwegian._logger.warning(f"Querying Norwegian REST API endpoint {itinerary_search_api_endpoint} failed, "
+                                      f"code: {search_results_response.status_code}, "
+                                      f"error: {search_results_response.text}")
+            return
+
+        Norwegian._logger.debug(f"API query returned in {time_end - time_start:.03f} seconds, "
+                                f"returned {len(search_results_response.text):,} bytes")
+
+        search_results = search_results_response.json()
+        Norwegian._logger.debug(json.dumps(search_results, indent=4))
+
 
 
     @staticmethod
