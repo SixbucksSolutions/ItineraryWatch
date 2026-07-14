@@ -371,9 +371,14 @@ class Norwegian:
                         raise ValueError(f"Title not found in event: {json.dumps(curr_event, indent=4)}")
 
                     title_parts: list[str] = [item.strip() for item in curr_event["title"].split(",")]
-                    if len(title_parts) != 2:
-                        raise ValueError(f"Didn't get (name, region) out of title: {json.dumps(title_parts)}")
-                    location_name, location_region = title_parts
+                    if len(title_parts) < 2:
+                        raise ValueError(f"Could not parse location out of: {curr_event["title"]}")
+                    elif len(title_parts) == 2:
+                        location_name, location_region = title_parts
+                    elif len(title_parts) > 2:
+                        # Put item N in region, everything else gets a comma and added to location name
+                        location_name = ", ".join(title_parts[:-1])
+                        location_region = title_parts[-1]
 
                     if port_info["isTender"]:
                         # Start time is in event time
