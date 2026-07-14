@@ -141,16 +141,15 @@ class Norwegian:
 
     @staticmethod
     def _execute_api_query(api_search_filters: dict[str, str]) -> list[cruise_sailing.CruiseSailing]:
-        Norwegian._logger.debug("Search criteria we're passisng to API:")
+        Norwegian._logger.debug("Search criteria we're passing to API:")
         Norwegian._logger.debug(json.dumps(api_search_filters, indent=4))
 
-        Norwegian._search_api_get_matching_itinerary_codes_and_package_ids(api_search_filters)
-        return []
+        return Norwegian._search_api_get_matching_itinerary_codes_and_package_ids(api_search_filters)
 
 
     @staticmethod
     def _search_api_get_matching_itinerary_codes_and_package_ids(
-            api_search_filters: dict[str, str]) -> list[CruiseSailing]:
+            api_search_filters: dict[str, str]) -> list[cruise_sailing.CruiseSailing]:
 
         itinerary_search_api_endpoint: str = "https://www.ncl.com/api/v2/vacations/search"
 
@@ -267,17 +266,236 @@ class Norwegian:
             Norwegian._logger.debug(f"API query returned in {time_end - time_start:.03f} seconds, "
                                     f"returned {len(day_details_response.text):,} bytes")
 
-            search_results: dict[str, typing.Any] = day_details_response.json()
+            search_results: list[dict[str, typing.Any]] = day_details_response.json()
             Norwegian._logger.debug(json.dumps(search_results, indent=4))
 
-            # day_by_day_breakdown: list[cruise_day_detail.CruiseDayDetail] = \
-            #     Norwegian._parse_search_api_response_day_details(search_results)
+            day_by_day_breakdown: list[cruise_day_detail.CruiseDayDetail] = \
+                Norwegian._parse_search_api_response_day_details(search_results)
 
+            start_date: datetime.date = day_by_day_breakdown[0].date
+            end_date: datetime.date = day_by_day_breakdown[-1].date
+
+            parsed_sailings.append(
+                cruise_sailing.CruiseSailing(
+                    cruise_lines.CruiseLineCode.NORWEGIAN,
+                    ship_code,
+                    _ship_names[ship_code],
+                    _ship_classes[ship_code],
+                    typing.cast(str, sailing_details["itinerary_name"]),
+                    start_date,
+                    end_date,
+                    day_by_day_breakdown,
+                )
+            )
+
+        parsed_sailings.sort()
+        Norwegian._logger.info("Finished parsing search API results:")
+        Norwegian._logger.info(json.dumps(parsed_sailings, indent=4, default=str))
         return parsed_sailings
 
 
     @staticmethod
     def _parse_search_api_response_day_details(
-            search_results: dict[str, typing.Any] ) -> list[cruise_day_detail.CruiseDayDetail]:
+            search_results: list[dict[str, typing.Any]] ) -> list[cruise_day_detail.CruiseDayDetail]:
 
-        return []
+        sailing_day_breakdown: list[cruise_day_detail.CruiseDayDetail] = []
+
+        supported_event_types: set = {
+            "PORT",
+            "AT_SEA",
+        }
+
+        required_port_info_keys = [
+            "isTender",
+            "isEmbarkation",
+            "isDisembarkation",
+            "isOverNight",
+            "dailySchedule",
+            "code",                     # Geospatial data: three letter IATA airport code
+        ]
+
+        for curr_day_idx, curr_day_detail in enumerate(search_results, start=1):
+            Norwegian._logger.debug(f"Day index: {curr_day_idx}")
+
+            Norwegian._logger.debug(json.dumps(curr_day_detail, indent=4))
+
+            today_activities: list[cruise_day_detail.ShipActivity] = []
+
+            # Walk today's events
+            for event_idx, curr_event in enumerate(curr_day_detail["events"], start=1):
+                Norwegian._logger.debug(json.dumps(curr_event, indent=4))
+                # Make sure we have a date
+                if "date" not in curr_event:
+                    raise ValueError(f"Date not found in event: {json.dumps(curr_event, indent=4)}")
+
+                event_datetime: datetime.datetime = datetime.datetime.fromisoformat(curr_event["date"])
+
+                if not "eventType" in curr_event:
+                    raise ValueError(f"Event type not found in event: {json.dumps(curr_event, indent=4)}")
+
+                event_type: str = curr_event["eventType"]
+
+                if event_type not in supported_event_types:
+                    raise ValueError(f"Event type not supported: {event_type}")
+
+                if event_type == "AT_SEA":
+                    today_activities.append(
+                        cruise_day_detail.ShipActivity(
+                            cruise_day_detail.ActivityType.AT_SEA
+                        )
+                    )
+
+                    sailing_day_breakdown.append(
+                        cruise_day_detail.CruiseDayDetail(
+                            # The most recent event is fine, they're all the same date
+                            event_datetime.date(),
+                            today_activities
+                        )
+                    )
+
+                    # All we do that day
+                    break
+
+                elif event_type == "PORT":
+                    # What KIND of port event?
+                    port_info = curr_event["portInfo"]
+
+                    # Validate port info
+                    if len(port_info) != len(required_port_info_keys) or \
+                            not all(key in port_info for key in required_port_info_keys):
+                        raise ValueError(f"Not all required port info keys are present in port info: "
+                                         f"{json.dumps(port_info, indent=4)}")
+
+                    # Grab location and region
+                    if "title" not in curr_event:
+                        raise ValueError(f"Title not found in event: {json.dumps(curr_event, indent=4)}")
+
+                    title_parts: list[str] = [item.strip() for item in curr_event["title"].split(",")]
+                    if len(title_parts) != 2:
+                        raise ValueError(f"Didn't get (name, region) out of title: {json.dumps(title_parts)}")
+                    location_name, location_region = title_parts
+
+                    if port_info["isTender"]:
+                        # Start time is in event time
+                        start_time = event_datetime.time()
+
+                        end_time: datetime.time | None
+                        # If we aren't an overnight, parse end time out of daily schedule
+                        if port_info["isOverNight"]:
+                            today_activities.append(
+                                cruise_day_detail.ShipActivity(
+                                    cruise_day_detail.ActivityType.PORT_TENDERED_OVERNIGHT,
+                                    activity_start_time=start_time,
+                                    activity_location=cruise_day_detail.ShipActivityLocation(
+                                        location_name, location_region
+                                    )
+                                )
+                            )
+                        else:
+                            # 1. Split by the hyphen and grab the second part
+                            end_time_str = port_info["dailySchedule"].split("-")[1].strip()
+
+                            # 2. Parse the string using the 12-hour AM/PM format
+                            parsed_datetime = datetime.datetime.strptime(end_time_str, "%I:%M %p")
+
+                            # 3. Extract just the time object (results in 14:00:00)
+                            end_time = parsed_datetime.time()
+
+                            today_activities.append(
+                                cruise_day_detail.ShipActivity(
+                                    cruise_day_detail.ActivityType.PORT_TENDERED,
+                                    activity_start_time=start_time,
+                                    activity_end_time=end_time,
+                                    activity_location=cruise_day_detail.ShipActivityLocation(
+                                        location_name, location_region
+                                    )
+                                )
+                            )
+
+                    elif port_info["isEmbarkation"]:
+
+                        today_activities.append(
+                            cruise_day_detail.ShipActivity(
+                                cruise_day_detail.ActivityType.PORT_EMBARK,
+                                activity_end_time=event_datetime.time(),
+                                activity_location=cruise_day_detail.ShipActivityLocation(
+                                    location_name, location_region
+                                )
+                            )
+                        )
+
+                        sailing_day_breakdown.append(
+                            cruise_day_detail.CruiseDayDetail(
+                                # The most recent event is fine, they're all the same date
+                                event_datetime.date(),
+                                today_activities
+                            )
+                        )
+
+                        break
+
+
+                    elif port_info["isDisembarkation"]:
+                        today_activities.append(
+                            cruise_day_detail.ShipActivity(
+                                cruise_day_detail.ActivityType.PORT_DEBARK,
+                                activity_start_time=event_datetime.time(),
+                                activity_location=cruise_day_detail.ShipActivityLocation(
+                                    location_name, location_region
+                                )
+                            )
+                        )
+
+                        sailing_day_breakdown.append(
+                            cruise_day_detail.CruiseDayDetail(
+                                # The most recent event is fine, they're all the same date
+                                event_datetime.date(),
+                                today_activities
+                            )
+                        )
+
+                        break
+
+                    # it's just a normal port docking, nothing special
+                    else:
+                        # Start time is in event time
+                        start_time = event_datetime.time()
+
+                        end_time: datetime.time | None
+                        if port_info["isOverNight"]:
+                            today_activities.append(
+                                cruise_day_detail.ShipActivity(
+                                    cruise_day_detail.ActivityType.PORT_DOCKED_OVERNIGHT,
+                                    activity_start_time=start_time,
+                                    activity_location=cruise_day_detail.ShipActivityLocation(
+                                        location_name, location_region
+                                    )
+                                )
+                            )
+
+                        else:
+                            end_time_str = port_info["dailySchedule"].split("-")[1].strip()
+                            parsed_datetime = datetime.datetime.strptime(end_time_str, "%I:%M %p")
+                            end_time = parsed_datetime.time()
+
+                            today_activities.append(
+                                cruise_day_detail.ShipActivity(
+                                    cruise_day_detail.ActivityType.PORT_DOCKED,
+                                    activity_start_time=start_time,
+                                    activity_end_time=end_time,
+                                    activity_location=cruise_day_detail.ShipActivityLocation(
+                                        location_name, location_region
+                                    )
+                                )
+                            )
+
+                # We've completed a day of activities
+                sailing_day_breakdown.append(
+                    cruise_day_detail.CruiseDayDetail(
+                        # The most recent event is fine, they're all the same date
+                        event_datetime.date(),
+                        today_activities
+                    )
+                )
+
+        return sailing_day_breakdown
