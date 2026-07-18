@@ -57,6 +57,17 @@ functions:
         - 'src/scraper_launcher.py'
         - 'src/aws-rds-global-bundle.pem'
 
+  jwks_updater:
+    events:
+      - schedule: cron(0 */12 * * ? *)   # Runs at 00:00 and 12:00 UTC every day
+    role: arn:aws:iam::293119271420:role/ItineraryWatch_Lambda
+    handler: src/jwks_updater.lambda_entry_point_event_bridge
+    memorySize: 256
+    timeout: 10
+    package:
+      patterns:
+        - 'src/jwks_updater.py'
+
   itinerary_watch_scraper:
     events:
       - sns: arn:aws:sns:us-east-2:293119271420:itinerary_watch_scraper_trigger
