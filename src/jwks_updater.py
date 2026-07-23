@@ -8,7 +8,7 @@ import aws_lambda_powertools.utilities.typing
 
 
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="jwks_updater")
-_logger.setLevel(logging.DEBUG)
+_logger.setLevel(logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 

@@ -10,7 +10,7 @@ import psycopg
 
 
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="customer_notifier")
-_logger.setLevel(logging.DEBUG)
+_logger.setLevel(logging.INFO)
 
 _ssm_client = boto3.client("ssm",   region_name="us-east-2")
 _ses_client = boto3.client("ses",   region_name="us-east-2")

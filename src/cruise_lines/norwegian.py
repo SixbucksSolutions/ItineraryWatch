@@ -108,7 +108,7 @@ _ship_classes: dict[_ShipCode, str | None] = {
 class Norwegian:
 
     _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="cruise_line.Norwegian")
-    _logger.setLevel(logging.DEBUG)
+    _logger.setLevel(logging.INFO)
 
     @staticmethod
     def perform_itinerary_search(search_url: str) -> list[cruise_sailing.CruiseSailing]:

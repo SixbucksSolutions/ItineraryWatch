@@ -15,7 +15,7 @@ from src import cruise_lines
 from src import cruise_sailing
 
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="itinerary_watch_scraper")
-_logger.setLevel(logging.DEBUG)
+_logger.setLevel(logging.INFO)
 
 _ssm_client = boto3.client("ssm", region_name="us-east-2")
 _s3_client = boto3.client("s3", region_name="us-east-2")

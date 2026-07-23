@@ -18,7 +18,7 @@ from . import auth
 
 # Root powertools package gets imported by submodules, doesn't need explicit import
 _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="api.watch")
-_logger.setLevel(level=logging.DEBUG)
+_logger.setLevel(level=logging.INFO)
 
 _ssm_client = boto3.client("ssm",   region_name="us-east-2")
 _s3_client = boto3.client("s3",     region_name="us-east-2")

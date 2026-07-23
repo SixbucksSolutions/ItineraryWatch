@@ -82,7 +82,7 @@ _ship_classes: dict[_CelebrityShipCode, str | None] = {
 class Celebrity:
 
     _logger: aws_lambda_powertools.Logger = aws_lambda_powertools.Logger(service="cruise_line.Celebrity")
-    _logger.setLevel(logging.DEBUG)
+    _logger.setLevel(logging.INFO)
 
     @staticmethod
     def perform_itinerary_search(search_url: str) -> list[cruise_sailing.CruiseSailing]:
@@ -215,7 +215,7 @@ class Celebrity:
 
         search_results = search_results_response.json()
 
-        matching_sailings = Celebrity._parse_graphql_response_json(search_results, logging_level=logging.DEBUG)
+        matching_sailings = Celebrity._parse_graphql_response_json(search_results, logging_level=logging.INFO)
 
         return matching_sailings
 
